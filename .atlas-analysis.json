@@ -1,0 +1,65 @@
+{
+  "projectType": "general",
+  "projectName": "Una Aventura Inesperada",
+  "projectDescription": "A puzzle adventure game for Nintendo DS built with DevkitPro and C",
+  "theme": "almond",
+  "primaryColor": "#8B4513",
+  "lightColor": "#D2691E",
+  "darkColor": "#5C3317",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Getting Started",
+        "pages": [
+          "introduction",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "Game Design",
+        "pages": [
+          "gameplay/overview",
+          "gameplay/mechanics",
+          "gameplay/levels",
+          "gameplay/controls"
+        ]
+      },
+      {
+        "group": "Development",
+        "pages": [
+          "development/architecture",
+          "development/setup",
+          "development/building",
+          "development/assets"
+        ]
+      },
+      {
+        "group": "Technical Reference",
+        "pages": [
+          "reference/game-loop",
+          "reference/interrupts",
+          "reference/rendering",
+          "reference/tile-system"
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Grid-based puzzle gameplay with Sokoban-style box pushing",
+    "5 progressive levels with quiz questions",
+    "Animated sprites for player, NPCs, and enemies",
+    "Stamina/movement tracking system",
+    "Interactive dialog system with cinematics",
+    "Dual-screen Nintendo DS interface"
+  ],
+  "publicApiSurface": [
+    "TeclasJugador() - Player input handler",
+    "MoverEnemigo() - Enemy movement logic",
+    "MoverObstaculo() - Box pushing mechanics",
+    "GenerarNivel() - Level generation system",
+    "CrearDialogo() - Dialog system",
+    "ActualizarAnimacion() - Sprite animation handler",
+    "InicializarTeselas() - Tile initialization",
+    "ConfigurarInterrupciones() - Interrupt configuration"
+  ]
+}
