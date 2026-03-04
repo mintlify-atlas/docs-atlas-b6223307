@@ -1,0 +1,598 @@
+---
+title: 'Tile System'
+description: 'Tile memory organization, 2x2 sprite composition, animation frames, and tile data format'
+---
+
+## Overview
+
+Una Aventura Inesperada uses the Nintendo DS tile-based rendering system to display all gameplay graphics on the sub-screen. The game organizes tiles into a **32×24 tile map** where each **8×8 pixel tile** can be individually indexed. Characters, enemies, and objects are composed of **2×2 tile groups** (16×16 pixels) to create larger sprites.
+
+## Tile Memory Organization
+
+### Memory Pointers
+
+Tile and map memory are configured during initialization (main.c:171-172):
+
+```c
+tileMemory = (u8*) BG_TILE_RAM_SUB(1);
+mapMemory = (u16*) BG_MAP_RAM_SUB(0);
+```
+
+<ParamField path="tileMemory" type="u8*">
+  Points to **tile base 1** in sub-screen VRAM. Stores the actual pixel data for all tiles.
+  
+  **Base address:** `BG_TILE_RAM_SUB(1)`
+  
+  **Tile size:** 64 bytes each (8×8 pixels, 8 bits per pixel)
+  
+  **Capacity:** Hundreds of tiles (exact limit depends on VRAM configuration)
+</ParamField>
+
+<ParamField path="mapMemory" type="u16*">
+  Points to **map base 0** in sub-screen VRAM. Stores tile indices for the visible map.
+  
+  **Base address:** `BG_MAP_RAM_SUB(0)`
+  
+  **Map size:** 32×32 tiles (1024 entries), though only 32×24 is visible
+  
+  **Entry format:** 16-bit tile index (0-1023)
+</ParamField>
+
+### Memory Layout
+
+```
+Tile Memory (tileMemory):
+  Offset 0:    Tile 0 (64 bytes)
+  Offset 64:   Tile 1 (64 bytes)
+  Offset 128:  Tile 2 (64 bytes)
+  ...
+  Offset 64*N: Tile N (64 bytes)
+
+Map Memory (mapMemory):
+  [0]:  Tile index at (0, 0)
+  [1]:  Tile index at (1, 0)
+  ...
+  [31]: Tile index at (31, 0)
+  [32]: Tile index at (0, 1)
+  ...
+  [fila*32 + columna]: Tile index at (columna, fila)
+```
+
+## Map Memory (BG_MAP_RAM_SUB)
+
+The map memory stores tile indices in a **32×24 grid** (main.c:823-846):
+
+```c
+void GenerarNivel(u16 mapa[], unsigned int imagen[], int numeroMovimientosMax) {
+    int fila, columna;
+    int contEnemigos = 0;
+    numeroDeEnemigos = 0;
+    pos_mapData = 0;
+    
+    // Load tile map
+    for(fila = 0; fila < 24; fila++) {
+        for(columna = 0; columna < 32; columna++) {
+            pos_mapMemory = fila*32 + columna;
+            mapMemory[pos_mapMemory] = mapa[pos_mapData];
+            
+            // Track player position (tile 0)
+            if(mapMemory[pos_mapMemory] == 0) {
+                posJugColumna = columna;
+                posJugFila = fila;
+            }
+            // Track NPC position (tile 38)
+            else if(mapMemory[pos_mapMemory] == 38) {
+                posNpcColumna = columna;
+                posNpcFila = fila;
+            }
+            // Track enemy positions (tiles 5, 42)
+            else if(mapMemory[pos_mapMemory] == 5 || 
+                    mapMemory[pos_mapMemory] == 42) {
+                posicionesEnemigo[contEnemigos].x = columna;
+                posicionesEnemigo[contEnemigos].y = fila;
+                posicionesEnemigo[contEnemigos].vivo = true;
+                contEnemigos++;
+                numeroDeEnemigos++;
+            }
+            pos_mapData++;
+        }
+    }
+}
+```
+
+<Note>
+**Map indexing:** The map is addressed as `mapMemory[fila*32 + columna]` where:
+- `fila` ∈ [0, 23] (row, Y coordinate)
+- `columna` ∈ [0, 31] (column, X coordinate)
+
+This row-major layout matches the DS hardware's tile map format.
+</Note>
+
+## Tile Initialization
+
+The `InicializarTeselas()` function (main.c:1065-1185) loads **all tile graphics** into VRAM using DMA transfers. This is called once during startup (main.c:204).
+
+### Complete Tile Loading Sequence
+
+```c
+void InicializarTeselas() {
+    // PLAYER TILES
+    // Frame 1 (tiles 0, 8, 9, 10)
+    dmaCopy(t_jugadorF1Parte1, tileMemory,          sizeof(t_jugadorF1Parte1));  // Tile 0
+    dmaCopy(t_jugadorF1Parte2, tileMemory+(64*8),   sizeof(t_jugadorF1Parte2));  // Tile 8
+    dmaCopy(t_jugadorF1Parte3, tileMemory+(64*9),   sizeof(t_jugadorF1Parte3));  // Tile 9
+    dmaCopy(t_jugadorF1Parte4, tileMemory+(64*10),  sizeof(t_jugadorF1Parte4));  // Tile 10
+    
+    // Frame 2 (tiles 34, 35, 36, 37)
+    dmaCopy(t_jugadorF2Parte1, tileMemory+(64*34),  sizeof(t_jugadorF2Parte1));  // Tile 34
+    dmaCopy(t_jugadorF2Parte2, tileMemory+(64*35),  sizeof(t_jugadorF2Parte2));  // Tile 35
+    dmaCopy(t_jugadorF2Parte3, tileMemory+(64*36),  sizeof(t_jugadorF2Parte3));  // Tile 36
+    dmaCopy(t_jugadorF2Parte4, tileMemory+(64*37),  sizeof(t_jugadorF2Parte4));  // Tile 37
+    
+    // Player on green floor (tiles 6, 11, 12, 13)
+    dmaCopy(t_jugadorFondoVerdeParte1, tileMemory+(64*6),  sizeof(t_jugadorFondoVerdeParte1));  // Tile 6
+    dmaCopy(t_jugadorFondoVerdeParte2, tileMemory+(64*11), sizeof(t_jugadorFondoVerdeParte2));  // Tile 11
+    dmaCopy(t_jugadorFondoVerdeParte3, tileMemory+(64*12), sizeof(t_jugadorFondoVerdeParte3));  // Tile 12
+    dmaCopy(t_jugadorFondoVerdeParte4, tileMemory+(64*13), sizeof(t_jugadorFondoVerdeParte4));  // Tile 13
+    
+    // ENEMY TILES
+    // Frame 1 (tiles 5, 14, 15, 16)
+    dmaCopy(t_enemigoF1Parte1, tileMemory+(64*5),   sizeof(t_enemigoF1Parte1));   // Tile 5
+    dmaCopy(t_enemigoF1Parte2, tileMemory+(64*14),  sizeof(t_enemigoF1Parte2));   // Tile 14
+    dmaCopy(t_enemigoF1Parte3, tileMemory+(64*15),  sizeof(t_enemigoF1Parte3));   // Tile 15
+    dmaCopy(t_enemigoF1Parte4, tileMemory+(64*16),  sizeof(t_enemigoF1Parte4));   // Tile 16
+    
+    // Frame 2 (tiles 42, 43, 44, 45)
+    dmaCopy(t_enemigoF2Parte1, tileMemory+(64*42),  sizeof(t_enemigoF2Parte1));   // Tile 42
+    dmaCopy(t_enemigoF2Parte2, tileMemory+(64*43),  sizeof(t_enemigoF2Parte2));   // Tile 43
+    dmaCopy(t_enemigoF2Parte3, tileMemory+(64*44),  sizeof(t_enemigoF2Parte3));   // Tile 44
+    dmaCopy(t_enemigoF2Parte4, tileMemory+(64*45),  sizeof(t_enemigoF2Parte4));   // Tile 45
+    
+    // NPC TILES
+    // Frame 1 (tiles 38, 39, 40, 41) - NOTE: This is actually F2 in code
+    dmaCopy(t_npcF2Parte1, tileMemory+(64*38),  sizeof(t_npcF2Parte1));  // Tile 38
+    dmaCopy(t_npcF2Parte2, tileMemory+(64*39),  sizeof(t_npcF2Parte2));  // Tile 39
+    dmaCopy(t_npcF2Parte3, tileMemory+(64*40),  sizeof(t_npcF2Parte3));  // Tile 40
+    dmaCopy(t_npcF2Parte4, tileMemory+(64*41),  sizeof(t_npcF2Parte4));  // Tile 41
+    
+    // Frame 2 (tiles 30, 31, 32, 33) - NOTE: This is actually F1 in code
+    dmaCopy(t_npcParte1, tileMemory+(64*30),  sizeof(t_npcParte1));  // Tile 30
+    dmaCopy(t_npcParte2, tileMemory+(64*31),  sizeof(t_npcParte2));  // Tile 31
+    dmaCopy(t_npcParte3, tileMemory+(64*32),  sizeof(t_npcParte3));  // Tile 32
+    dmaCopy(t_npcParte4, tileMemory+(64*33),  sizeof(t_npcParte4));  // Tile 33
+    
+    // WALL TILES
+    // Left wall (tiles 7, 17)
+    dmaCopy(t_muroIzqParte1, tileMemory+(64*7),   sizeof(t_muroIzqParte1));   // Tile 7
+    dmaCopy(t_muroIzqParte2, tileMemory+(64*17),  sizeof(t_muroIzqParte2));   // Tile 17
+    
+    // Right wall (tiles 24, 25)
+    dmaCopy(t_muroDerParte1, tileMemory+(64*24),  sizeof(t_muroDerParte1));   // Tile 24
+    dmaCopy(t_muroDerParte2, tileMemory+(64*25),  sizeof(t_muroDerParte2));   // Tile 25
+    
+    // Generic wall (tiles 26, 27, 28, 29)
+    dmaCopy(t_muroParte1, tileMemory+(64*26),  sizeof(t_muroParte1));  // Tile 26
+    dmaCopy(t_muroParte2, tileMemory+(64*27),  sizeof(t_muroParte2));  // Tile 27
+    dmaCopy(t_muroParte3, tileMemory+(64*28),  sizeof(t_muroParte3));  // Tile 28
+    dmaCopy(t_muroParte4, tileMemory+(64*29),  sizeof(t_muroParte4));  // Tile 29
+    
+    // BOX TILES (tiles 19, 20, 21, 22)
+    dmaCopy(t_cajaParte1, tileMemory+(64*19),  sizeof(t_cajaParte1));  // Tile 19
+    dmaCopy(t_cajaParte2, tileMemory+(64*20),  sizeof(t_cajaParte2));  // Tile 20
+    dmaCopy(t_cajaParte3, tileMemory+(64*21),  sizeof(t_cajaParte3));  // Tile 21
+    dmaCopy(t_cajaParte4, tileMemory+(64*22),  sizeof(t_cajaParte4));  // Tile 22
+    
+    // FLOOR/ENVIRONMENT TILES
+    dmaCopy(t_salida,  tileMemory+(64*1),  sizeof(t_salida));   // Tile 1 - Exit
+    dmaCopy(t_meta,    tileMemory+(64*2),  sizeof(t_meta));     // Tile 2 - Goal
+    dmaCopy(t_hierba,  tileMemory+(64*3),  sizeof(t_hierba));   // Tile 3 - Grass
+    dmaCopy(t_mitad,   tileMemory+(64*4),  sizeof(t_mitad));    // Tile 4 - Half
+    dmaCopy(t_vacio,   tileMemory+(64*18), sizeof(t_vacio));    // Tile 18 - Void
+    dmaCopy(t_dialogoColision, tileMemory+(64*23), sizeof(t_dialogoColision));  // Tile 23
+    
+    // MENU TITLE TILES (tiles 46-93)
+    dmaCopy(t_menuTitulo0,  tileMemory+(64*46), sizeof(t_menuTitulo0));   // Tile 46
+    dmaCopy(t_menuTitulo1,  tileMemory+(64*47), sizeof(t_menuTitulo1));   // Tile 47
+    dmaCopy(t_menuTitulo2,  tileMemory+(64*48), sizeof(t_menuTitulo2));   // Tile 48
+    // ... (continues through tile 93)
+    dmaCopy(t_menuTitulo47, tileMemory+(64*93), sizeof(t_menuTitulo47));  // Tile 93
+}
+```
+
+<Note>
+**Total tiles loaded:** 94 tiles (indices 0-93)
+
+**Memory usage:** 94 × 64 bytes = 6,016 bytes (~6KB)
+
+The menu title alone uses 48 tiles (46-93), demonstrating the modular nature of the tile system.
+</Note>
+
+## Tile Indices and Mapping
+
+### Gameplay Tile Reference
+
+<ParamField path="Tile 0, 8, 9, 10" type="Player Frame 1">
+  Player sprite, first animation frame (normal floor)
+</ParamField>
+
+<ParamField path="Tile 6, 11, 12, 13" type="Player Frame 1 (Green)">
+  Player sprite on green grass floor
+</ParamField>
+
+<ParamField path="Tile 34, 35, 36, 37" type="Player Frame 2">
+  Player sprite, second animation frame
+</ParamField>
+
+<ParamField path="Tile 5, 14, 15, 16" type="Enemy Frame 1">
+  Enemy sprite, first animation frame
+</ParamField>
+
+<ParamField path="Tile 42, 43, 44, 45" type="Enemy Frame 2">
+  Enemy sprite, second animation frame
+</ParamField>
+
+<ParamField path="Tile 38, 39, 40, 41" type="NPC Frame 1">
+  Non-player character, first animation frame
+</ParamField>
+
+<ParamField path="Tile 30, 31, 32, 33" type="NPC Frame 2">
+  Non-player character, second animation frame
+</ParamField>
+
+<ParamField path="Tile 19, 20, 21, 22" type="Box/Obstacle">
+  Pushable box (2×2 tiles)
+</ParamField>
+
+<ParamField path="Tile 7, 17" type="Left Wall">
+  Wall oriented on the left side
+</ParamField>
+
+<ParamField path="Tile 24, 25" type="Right Wall">
+  Wall oriented on the right side
+</ParamField>
+
+<ParamField path="Tile 26, 27, 28, 29" type="Generic Wall">
+  Standard wall segments
+</ParamField>
+
+<ParamField path="Tile 1" type="Exit Floor">
+  Floor tile at level exit
+</ParamField>
+
+<ParamField path="Tile 2" type="Goal Floor">
+  Floor tile at goal position
+</ParamField>
+
+<ParamField path="Tile 3" type="Grass Floor">
+  Green grass floor tile
+</ParamField>
+
+<ParamField path="Tile 18" type="Void">
+  Black void (impassable)
+</ParamField>
+
+<ParamField path="Tile 23" type="Dialog Trigger">
+  Collision tile that triggers `ConsultarSistemaDialogo()` (main.c:476)
+</ParamField>
+
+## 2x2 Tile Sprites
+
+All game entities (player, enemies, NPCs, boxes) are composed of **2×2 tile arrangements** to create 16×16 pixel sprites:
+
+### Player Sprite Layout
+
+```
+┌─────────┬─────────┐
+│ Tile 0  │ Tile 8  │  <- Top row
+├─────────┼─────────┤
+│ Tile 9  │ Tile 10 │  <- Bottom row
+└─────────┴─────────┘
+   8px       8px
+```
+
+In code (main.c:304-314):
+
+```c
+pos_mapMemory = posJugFila*32 + posJugColumna;
+mapMemory[pos_mapMemory] = ElegirFondoJugador(0, pos_mapMemory);  // Top-left
+
+pos_mapMemory = posJugFila*32 + (posJugColumna+1);
+mapMemory[pos_mapMemory] = ElegirFondoJugador(1, pos_mapMemory);  // Top-right
+
+pos_mapMemory = (posJugFila+1)*32 + posJugColumna;
+mapMemory[pos_mapMemory] = ElegirFondoJugador(2, pos_mapMemory);  // Bottom-left
+
+pos_mapMemory = (posJugFila+1)*32 + (posJugColumna+1);
+mapMemory[pos_mapMemory] = ElegirFondoJugador(3, pos_mapMemory);  // Bottom-right
+```
+
+### Enemy Sprite Layout (Frame 1)
+
+```
+┌─────────┬─────────┐
+│ Tile 5  │ Tile 14 │
+├─────────┼─────────┤
+│ Tile 15 │ Tile 16 │
+└─────────┴─────────┘
+```
+
+Example from `MoverEnemigo()` (main.c:522-525):
+
+```c
+mapMemory[(posJugFila-4)*32 + posJugColumna]     = 5;   // Top-left
+mapMemory[(posJugFila-4)*32 + (posJugColumna+1)] = 14;  // Top-right
+mapMemory[(posJugFila-3)*32 + posJugColumna]     = 15;  // Bottom-left
+mapMemory[(posJugFila-3)*32 + (posJugColumna+1)] = 16;  // Bottom-right
+```
+
+### Box Sprite Layout
+
+```
+┌─────────┬─────────┐
+│ Tile 19 │ Tile 20 │
+├─────────┼─────────┤
+│ Tile 21 │ Tile 22 │
+└─────────┴─────────┘
+```
+
+Example from `MoverObstaculo()` (main.c:608-611):
+
+```c
+mapMemory[(posJugFila-4)*32 + posJugColumna]     = 19;  // Top-left
+mapMemory[(posJugFila-4)*32 + (posJugColumna+1)] = 20;  // Top-right
+mapMemory[(posJugFila-3)*32 + posJugColumna]     = 21;  // Bottom-left
+mapMemory[(posJugFila-3)*32 + (posJugColumna+1)] = 22;  // Bottom-right
+```
+
+<Warning>
+**Movement grid constraint:** Because entities are 2×2 tiles, all positions and movements must be in **increments of 2**:
+
+```c
+posJugFila -= 2;  // Move up 2 tiles
+posJugColumna += 2;  // Move right 2 tiles
+```
+
+This is why collision detection checks 2 tiles ahead (main.c:274, 276).
+</Warning>
+
+## Animation Frames
+
+The game alternates between two animation frames (**F1** and **F2**) for all animated entities:
+
+### Frame Toggle Mechanism
+
+Controlled by the global flag `esFotograma1Activo` (main.c:99), toggled by `ActualizarAnimacion()` (main.c:981):
+
+```c
+void ActualizarAnimacion() {
+    if(esFotograma1Activo == true) {
+        // Update all sprites to Frame 1
+        // ...
+        esFotograma1Activo = false;
+    } else {
+        // Update all sprites to Frame 2
+        // ...
+        esFotograma1Activo = true;
+    }
+}
+```
+
+### Player Animation
+
+The player's animation is more complex because it blends with the floor type. The `ElegirFondoJugador()` function (main.c:464) selects tiles based on:
+
+1. **Tile part** (0-3 for the 2×2 sprite)
+2. **Current floor type** (read from `mapMemory`)
+3. **Animation frame** (`esFotograma1Activo`)
+
+```c
+int ElegirFondoJugador(int indiceTesela, int posicion) {
+    if(indiceTesela == 0) {  // Top-left tile
+        switch(mapMemory[posicion]) {
+            case 1:  // Exit floor
+                return esFotograma1Activo == true ? 0 : 34;
+            case 3:  // Grass floor
+                return esFotograma1Activo == true ? 6 : 34;
+            case 0:
+            case 8:
+            case 9:
+            case 10:
+                return esFotograma1Activo == true ? 0 : 34;
+            case 23:  // Dialog trigger
+                ConsultarSistemaDialogo();
+                return 6;
+            default:
+                return esFotograma1Activo == true ? 6 : 34;
+        }
+    }
+    else if(indiceTesela == 1) {  // Top-right tile
+        switch(mapMemory[posicion]) {
+            case 1:
+                return esFotograma1Activo == true ? 8 : 35;
+            case 3:
+                return esFotograma1Activo == true ? 11 : 35;
+            case 0:
+            case 8:
+            case 9:
+            case 10:
+                return esFotograma1Activo == true ? 8 : 35;
+            default:
+                return esFotograma1Activo == true ? 11 : 35;
+        }
+    }
+    // ... similar for indiceTesela 2 and 3
+}
+```
+
+<Note>
+**Player animation tiles:**
+
+**Frame 1 (Normal floor):** 0, 8, 9, 10
+
+**Frame 1 (Grass floor):** 6, 11, 12, 13
+
+**Frame 2 (All floors):** 34, 35, 36, 37
+
+This allows the player sprite to visually blend with grass tiles while maintaining animation.
+</Note>
+
+### Enemy and NPC Animation
+
+Enemies and NPCs use simpler frame swapping (main.c:998-1042):
+
+**Enemies:**
+- Frame 1: Tiles 5, 14, 15, 16
+- Frame 2: Tiles 42, 43, 44, 45
+
+**NPCs:**
+- Frame 1: Tiles 38, 39, 40, 41
+- Frame 2: Tiles 30, 31, 32, 33
+
+## Tile Data Format
+
+Each tile is **8×8 pixels** stored as **64 bytes** in tile memory:
+
+### Memory Structure
+
+```
+Tile N at tileMemory + (64 * N):
+  Byte 0:  Row 0, Column 0 (palette index)
+  Byte 1:  Row 0, Column 1
+  Byte 2:  Row 0, Column 2
+  ...
+  Byte 7:  Row 0, Column 7
+  Byte 8:  Row 1, Column 0
+  ...
+  Byte 63: Row 7, Column 7
+```
+
+### Palette Index Format
+
+Each byte stores a **palette index** (0-255) that maps to `BG_PALETTE_SUB`:
+
+```c
+// Example tile data (conceptual)
+u8 exampleTile[64] = {
+    3, 3, 3, 3, 3, 3, 3, 3,  // Row 0: all green (grass)
+    3, 1, 1, 3, 3, 1, 1, 3,  // Row 1: mixed colors
+    // ... 6 more rows
+};
+
+// Each value references BG_PALETTE_SUB:
+// 1 -> RGB15(15, 4, 6)   (dark red)
+// 3 -> RGB15(9, 20, 9)   (green)
+```
+
+<Warning>
+**Tile data is opaque:** The actual tile data is stored in included header files (e.g., `teselas.h`). The game loads pre-compiled tile graphics rather than generating them at runtime.
+</Warning>
+
+## Collision Detection with Tiles
+
+Movement validation checks tile indices to determine passability:
+
+### Impassable Tiles
+
+From `TeclasJugador()` (main.c:274, 323, 362, 399):
+
+```c
+// Check if next tile is void (18) or wall (various indices)
+if(mapMemory[(posJugFila-1)*32 + posJugColumna] != 18 &&  // Not void
+   mapMemory[(posJugFila-1)*32 + posJugColumna] != 28) {  // Not wall
+    // Movement allowed
+}
+```
+
+**Wall tiles (impassable):**
+- 7, 17 (left walls)
+- 24, 25 (right walls)
+- 26, 27, 28, 29 (generic walls)
+- 18 (void)
+
+### Interactive Tiles
+
+**Box (tile 19):**
+- Triggers `MoverObstaculo()` if pushable
+- Blocks movement if obstructed
+
+**Enemy (tiles 5, 42):**
+- Triggers `MoverEnemigo()` if space available
+- Blocks movement if no space to push
+- Sets `puedeJugadorMoverse = false` if eliminated
+
+**Dialog trigger (tile 23):**
+- Calls `ConsultarSistemaDialogo()` (main.c:476)
+- Advances to quiz/next level
+
+## Floor Restoration
+
+When entities move, the game restores original floor tiles using `ComprobarSuelo()` (main.c:446):
+
+```c
+int ComprobarSuelo(int posicion, u16 mapa[]) {
+    switch(mapa[posicion]) {
+        case 0:  // Player start -> exit floor
+            return 1;
+        case 1:  // Exit floor
+            return 1;
+        case 2:  // Goal floor
+            return 2;
+        case 3:  // Grass floor
+            return 3;
+        case 5:  // Enemy -> grass floor
+            return 3;
+        default:
+            return 1;  // Default to exit floor
+    }
+}
+```
+
+Usage example (main.c:296-299):
+
+```c
+// Restore 2×2 floor tiles where player was standing
+mapMemory[(posJugFila)*32 + posJugColumna] = 
+    ComprobarSuelo((posJugFila)*32 + posJugColumna, mapaAcutal);
+mapMemory[(posJugFila)*32 + (posJugColumna+1)] = 
+    ComprobarSuelo((posJugFila)*32 + (posJugColumna+1), mapaAcutal);
+mapMemory[(posJugFila+1)*32 + posJugColumna] = 
+    ComprobarSuelo((posJugFila+1)*32 + posJugColumna, mapaAcutal);
+mapMemory[(posJugFila+1)*32 + (posJugColumna+1)] = 
+    ComprobarSuelo((posJugFila+1)*32 + (posJugColumna+1), mapaAcutal);
+```
+
+<Note>
+**Why use `mapaAcutal` instead of `mapMemory`?**
+
+`mapaAcutal` (main.c:121) stores the **original level data** before any entities moved. `mapMemory` contains the **current state** with sprites overlaid on floors. Checking `mapaAcutal` ensures the correct floor tile is restored.
+</Note>
+
+## Performance Considerations
+
+### Tile Memory Efficiency
+
+- **Total tiles loaded:** 94 tiles (6KB)
+- **Map memory:** 768 active entries (1.5KB)
+- **VRAM overhead:** Minimal (~8KB total)
+
+### Update Performance
+
+Tile map updates are extremely fast:
+
+```c
+// Single tile update: 1 write to VRAM
+mapMemory[posicion] = tile_index;  // ~5 CPU cycles
+
+// Player movement: 8 writes (old position + new position)
+// ~40 cycles total
+
+// Animation update: 12 writes (player + NPC + enemies)
+// ~60 cycles total
+```
+
+<Note>
+Tile-based rendering is ideal for the DS because:
+- **Small memory footprint** - Reuse tiles across the map
+- **Fast updates** - Single writes change 8×8 pixel regions
+- **Hardware-accelerated** - DS GPU handles tile rendering
+</Note>

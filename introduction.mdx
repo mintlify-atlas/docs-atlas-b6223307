@@ -1,0 +1,277 @@
+---
+title: "Introduction"
+description: "Learn about Una Aventura Inesperada, a tile-based puzzle game for Nintendo DS built with DevkitPro and C"
+---
+
+# Una Aventura Inesperada
+
+**Una Aventura Inesperada** ("An Unexpected Adventure") is a puzzle game developed for the Nintendo DS handheld console using C and the DevkitPro ARM toolchain. The game features grid-based movement mechanics, animated sprites, and an engaging quiz-based progression system.
+
+## What is Una Aventura Inesperada?
+
+Una Aventura Inesperada is a tile-based puzzle game where players navigate through increasingly challenging levels while managing limited stamina (movement points). Players must push boxes, avoid enemies, and answer quiz questions to progress through the adventure.
+
+<Note>
+  The game leverages the Nintendo DS's unique dual-screen interface - the top screen displays the gameplay area with tile-based graphics, while the bottom touchscreen handles menus, dialogs, and interactive elements.
+</Note>
+
+## Game Overview
+
+The game combines classic Sokoban-style puzzle mechanics with educational quiz elements:
+
+- **Grid-based Movement**: Navigate a 2×2 tile character through puzzle-filled levels
+- **Resource Management**: Complete each level within a limited number of moves
+- **Enemy Interactions**: Push enemies away or eliminate them strategically
+- **Box Pushing**: Classic puzzle mechanics requiring spatial planning
+- **Quiz System**: Answer questions correctly to progress between levels
+- **Animated Sprites**: Smooth character and enemy animations at 2 frames per sprite
+
+## Key Features
+
+### Five Progressive Levels
+
+The game includes 5 handcrafted levels with varying difficulty:
+
+| Level | Movement Limit | Description |
+|-------|----------------|-------------|
+| 1 | 18 moves | Introduction to basic mechanics |
+| 2 | 19 moves | Introduces multiple enemies |
+| 3 | 23 moves | Complex box-pushing puzzles |
+| 4 | 21 moves | Tight spaces and strategic planning |
+| 5 | 24 moves | Final challenge combining all mechanics |
+
+These movement limits are defined in the source code:
+
+```c title="source/main.c"
+#define MOVIMIENTOS_NIV1 18
+#define MOVIMIENTOS_NIV2 19
+#define MOVIMIENTOS_NIV3 23
+#define MOVIMIENTOS_NIV4 21
+#define MOVIMIENTOS_NIV5 24
+```
+
+### Stamina System
+
+Players have a visual stamina bar displayed on the bottom screen that depletes with each move:
+
+```c title="source/main.c"
+#define ANCHO_BARRA_ESTAMINA 32
+#define ALTO_BARRA_ESTAMINA 155
+#define COMIENZO_LINEA_BARRA_ESTAMINA 38
+#define COMIENZO_COLUMNA_BARRA_ESTAMINA 20
+```
+
+The stamina bar updates in real-time as you move, providing immediate feedback on remaining moves.
+
+### Interactive Dialog System
+
+At the end of each level, players must answer quiz questions correctly to proceed:
+
+- Multiple choice questions with two options
+- Touch-based input on the bottom screen
+- Correct answers unlock the next level
+- Wrong answers restart the current level
+- Timer-based delays prevent accidental input
+
+<CodeGroup>
+```c title="Dialog Creation"
+bool CrearDialogo(unsigned int imagen[], int opcionCorrecta){
+    timerPause(1);
+    esActivoBotonReinicio=false;
+    
+    dmaCopy(imagen, VRAM_A, 256*192*2);
+    REG_DISPCNT = MODE_FB0;
+    
+    opcionElegida=-1;
+    
+    // Wait for player input
+    u32 keys;
+    while(opcionElegida == -1){
+        scanKeys();
+        keys = keysCurrent();
+        if(keys & KEY_TOUCH && esActivoBotonesDialogos == true){
+            touchRead(&posicionXY);
+            // Check button regions...
+        }
+        swiWaitForVBlank();
+    }
+    
+    return (opcionElegida == opcionCorrecta);
+}
+```
+
+```c title="Level Progression"
+void ConsultarSistemaDialogo(){
+    switch(nivelActual){
+        case 0: // Level 1
+            if(esJuegoReiniciado == false && 
+               CrearDialogo(Pregunta1_1Bitmap,1) && 
+               CrearDialogo(Pregunta1_2Bitmap,0) && 
+               CrearDialogo(Pregunta1_3Bitmap,0)){
+                nivelActual++;
+                CrearDialogo(PreguntasAcertadasBitmap,2);
+                mapaAcutal = nivel2;
+                GenerarNivel(nivel2,HUDBitmap,MOVIMIENTOS_NIV2);
+            }
+            break;
+        // Additional levels...
+    }
+}
+```
+</CodeGroup>
+
+### Animated Sprites
+
+The game features smooth 2-frame animations for all characters:
+
+- **Player Character**: 2×2 tile sprite with walking animation
+- **NPC Characters**: Animated companion character
+- **Enemies**: Animated hostile entities (up to 10 simultaneous enemies)
+- **Frame Rate**: Controlled via hardware timers for consistent animation
+
+```c title="source/main.c"
+void ActualizarAnimacion(){
+    if(esFotograma1Activo==true){
+        // Render frame 1 for all sprites
+        for(int i=0; i<numeroDeEnemigos; i++){
+            if(posicionesEnemigo[i].vivo==true){
+                mapMemory[pos_mapMemory] = 5;  // Enemy frame 1
+                // Update all 4 tiles of the 2x2 sprite...
+            }
+        }
+        esFotograma1Activo = false;
+    } else {
+        // Render frame 2 for all sprites
+        for(int i=0; i<numeroDeEnemigos; i++){
+            if(posicionesEnemigo[i].vivo==true){
+                mapMemory[pos_mapMemory] = 42;  // Enemy frame 2
+                // Update all 4 tiles of the 2x2 sprite...
+            }
+        }
+        esFotograma1Activo = true;
+    }
+}
+```
+
+### Dual-Screen Interface
+
+The Nintendo DS's unique hardware is fully utilized:
+
+**Top Screen (Main Display)**:
+- 32×24 tile grid gameplay area
+- Tile-based rendering using 8×8 pixel tiles
+- 256-color palette (RGB15 format)
+- Real-time sprite animation
+
+**Bottom Screen (Sub Display)**:
+- Touch-sensitive menu system
+- HUD with stamina bar visualization
+- Dialog boxes with interactive buttons
+- Main menu and credits screen
+
+## Target Platform
+
+### Nintendo DS Hardware
+
+The game is built specifically for the Nintendo DS:
+
+- **CPU**: ARM9 (67 MHz) and ARM7 (33 MHz)
+- **RAM**: 4 MB main RAM
+- **VRAM**: 656 KB video RAM
+- **Screens**: Dual 3-inch LCD screens (256×192 pixels each)
+- **Input**: D-Pad, buttons, and resistive touchscreen
+
+<Warning>
+  This game requires actual Nintendo DS hardware or an emulator like DeSmuME or melonDS to run. It will not work on other platforms without significant modifications.
+</Warning>
+
+## Technology Stack
+
+### DevkitPro ARM Toolchain
+
+The game is built using the DevkitPro suite:
+
+- **Compiler**: GCC ARM cross-compiler
+- **Libraries**: libnds (Nintendo DS library)
+- **Build System**: Make
+- **Language**: C (C99 standard)
+
+### Core Libraries
+
+The game relies on several key libraries:
+
+```c title="source/main.c"
+#include <nds.h>           // Main NDS library
+#include <stdio.h>         // Standard I/O
+#include <stdlib.h>        // Standard library
+#include <nds/ndstypes.h>  // NDS type definitions
+```
+
+### Graphics System
+
+- **Tile-based rendering**: All graphics use 8×8 pixel tiles
+- **Palette mode**: 256-color indexed palette (8-bit)
+- **DMA transfers**: Hardware-accelerated memory copies for graphics
+- **Background layers**: Utilizes NDS background rendering modes
+
+```c title="Graphics Initialization"
+// Initialize hardware
+REG_POWERCNT = POWER_ALL_2D;
+REG_DISPCNT_SUB  = MODE_0_2D | DISPLAY_BG0_ACTIVE;
+VRAM_C_CR = VRAM_ENABLE | VRAM_C_SUB_BG;
+
+// Set up framebuffer for menu
+VRAM_A_CR = VRAM_ENABLE | VRAM_A_LCD;
+VRAM_B_CR = VRAM_ENABLE | VRAM_B_LCD;
+fb = VRAM_A;
+```
+
+### Interrupt System
+
+The game uses hardware interrupts for responsive gameplay:
+
+```c title="source/main.c"
+void ConfigurarInterrupciones(){
+    // Enable keyboard interrupts for D-Pad input
+    irqSet(IRQ_KEYS, TeclasJugador);
+    irqEnable(IRQ_KEYS);
+    REG_KEYCNT = 0x7FFF;
+    
+    // Timer for dialog button debouncing
+    irqEnable(IRQ_TIMER0);
+    irqSet(IRQ_TIMER0, HabilitarBotonesDialogo);
+    TIMER_DATA(0) = 32768;
+    TIMER_CR(0) = TIMER_DIV_1024 | TIMER_ENABLE | TIMER_IRQ_REQ;
+    
+    // Timer for sprite animation
+    irqEnable(IRQ_TIMER1);
+    irqSet(IRQ_TIMER1, ActualizarAnimacion);
+    TIMER_DATA(1) = 32768;
+    TIMER_CR(1) = TIMER_DIV_1024 | TIMER_ENABLE | TIMER_IRQ_REQ;
+}
+```
+
+## Project Information
+
+- **Author**: Juan José Gómez Simón
+- **Version**: 0.8
+- **Date**: December 9, 2020
+- **Language**: Spanish (game text and code comments)
+- **License**: Not specified in source
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Set up DevkitPro and build the game from source
+  </Card>
+  <Card title="Game Mechanics" icon="gamepad">
+    Learn the detailed game rules and strategies
+  </Card>
+  <Card title="Level Design" icon="map">
+    Explore the level layouts and puzzle solutions
+  </Card>
+  <Card title="Source Code" icon="code">
+    Dive into the technical implementation details
+  </Card>
+</CardGroup>

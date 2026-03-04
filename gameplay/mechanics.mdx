@@ -1,0 +1,509 @@
+---
+title: 'Game Mechanics'
+description: 'Deep dive into the movement system, collision detection, and interactive elements'
+---
+
+## Grid-Based Movement
+
+Una Aventura Inesperada uses a **2x2 tile grid system** where the player character occupies a 2x2 space on a 32x24 tile map.
+
+<Info>
+**Grid Structure:** The game world is a 32 columns × 24 rows tile grid. The player sprite is composed of 4 tiles (2x2), and moves in 2-tile increments.
+</Info>
+
+### Movement Implementation
+
+The `TeclasJugador()` function (source/main.c:271-437) handles all player movement via D-pad input:
+
+<Tabs>
+  <Tab title="Up Movement">
+    **Moving Up (North)**
+    
+    ```c
+    // From source/main.c:274
+    if (movimientosJugador > 0 && REG_KEYINPUT == 0x03BF && posJugFila > 0 && 
+        esPartidaAcabada==false && mapMemory[(posJugFila-1)*32+posJugColumna] != 18 && 
+        mapMemory[(posJugFila-1)*32+posJugColumna] != 28)
+    ```
+    
+    **Requirements:**
+    - At least 1 movement remaining
+    - Not at top edge (`posJugFila > 0`)
+    - Game is active (`esPartidaAcabada == false`)
+    - Target tile is not void (tile 18) or wall (tile 28)
+    
+    **Position Update:**
+    ```c
+    posJugFila -= 2;  // Move 2 tiles up
+    ```
+  </Tab>
+  
+  <Tab title="Down Movement">
+    **Moving Down (South)**
+    
+    ```c
+    // From source/main.c:323
+    if (movimientosJugador > 0 && REG_KEYINPUT == 0x037F && posJugFila+1 < 23 && 
+        esPartidaAcabada==false && mapMemory[(posJugFila+2)*32+(posJugColumna+1)] != 18 && 
+        mapMemory[(posJugFila+2)*32+(posJugColumna+1)] != 27)
+    ```
+    
+    **Requirements:**
+    - At least 1 movement remaining
+    - Not at bottom edge (`posJugFila+1 < 23`)
+    - Game is active
+    - Target tile is not void (tile 18) or wall (tile 27)
+    
+    **Position Update:**
+    ```c
+    posJugFila += 2;  // Move 2 tiles down
+    ```
+  </Tab>
+  
+  <Tab title="Left Movement">
+    **Moving Left (West)**
+    
+    ```c
+    // From source/main.c:362
+    if (movimientosJugador > 0 && REG_KEYINPUT == 0x03DF && posJugColumna > 0 && 
+        esPartidaAcabada==false && mapMemory[(posJugFila)*32+(posJugColumna-1)] != 18 && 
+        mapMemory[(posJugFila)*32+(posJugColumna-1)] != 24 && 
+        mapMemory[(posJugFila)*32+(posJugColumna-1)] != 27)
+    ```
+    
+    **Requirements:**
+    - At least 1 movement remaining
+    - Not at left edge (`posJugColumna > 0`)
+    - Game is active
+    - Target tile is not void (tile 18), left wall (tile 24), or wall (tile 27)
+    
+    **Position Update:**
+    ```c
+    posJugColumna -= 2;  // Move 2 tiles left
+    ```
+  </Tab>
+  
+  <Tab title="Right Movement">
+    **Moving Right (East)**
+    
+    ```c
+    // From source/main.c:399
+    if (movimientosJugador > 0 && REG_KEYINPUT == 0x03EF && posJugColumna+1 < 31 && 
+        esPartidaAcabada==false && mapMemory[(posJugFila+1)*32+(posJugColumna+2)] != 18 && 
+        mapMemory[(posJugFila+1)*32+(posJugColumna+2)] != 17 && 
+        mapMemory[(posJugFila)*32+(posJugColumna+2)] != 26)
+    ```
+    
+    **Requirements:**
+    - At least 1 movement remaining
+    - Not at right edge (`posJugColumna+1 < 31`)
+    - Game is active
+    - Target tile is not void (tile 18), right wall (tile 17), or wall (tile 26)
+    
+    **Position Update:**
+    ```c
+    posJugColumna += 2;  // Move 2 tiles right
+    ```
+  </Tab>
+</Tabs>
+
+### Tile Restoration
+
+When the player moves, the previous position is restored to the original map state:
+
+```c
+// From source/main.c:296-299 (example for upward movement)
+mapMemory[(posJugFila)*32+posJugColumna] = ComprobarSuelo((posJugFila)*32+posJugColumna, mapaAcutal);
+mapMemory[(posJugFila)*32+(posJugColumna+1)] = ComprobarSuelo((posJugFila)*32+(posJugColumna+1), mapaAcutal);
+mapMemory[(posJugFila+1)*32+posJugColumna] = ComprobarSuelo((posJugFila+1)*32+posJugColumna, mapaAcutal);
+mapMemory[(posJugFila+1)*32+(posJugColumna+1)] = ComprobarSuelo((posJugFila+1)*32+(posJugColumna+1), mapaAcutal);
+```
+
+The `ComprobarSuelo()` function (source/main.c:446-455) determines the original floor tile type.
+
+## Box Pushing Mechanics
+
+Boxes are interactive obstacles that can be pushed to clear paths or trap enemies.
+
+### Push Implementation
+
+The `MoverObstaculo()` function (source/main.c:605-651) handles box physics:
+
+```c
+// Example: Pushing box upward (source/main.c:607-616)
+if(direccion == 0 && mapMemory[(posJugFila-4)*32+posJugColumna] != 18 && 
+   mapMemory[(posJugFila-4)*32+posJugColumna] != 19 && 
+   mapMemory[(posJugFila-4)*32+posJugColumna] != 26 && 
+   mapMemory[(posJugFila-4)*32+posJugColumna] != 5 && 
+   mapMemory[(posJugFila-4)*32+posJugColumna] != 42){
+    mapMemory[(posJugFila-4)*32+posJugColumna] = 19;
+    mapMemory[(posJugFila-4)*32+(posJugColumna+1)] = 20;
+    mapMemory[(posJugFila-3)*32+posJugColumna] = 21;
+    mapMemory[(posJugFila-3)*32+(posJugColumna+1)] = 22;
+    // ... clear old position
+}
+```
+
+<Accordion title="Box Tile IDs">
+  Boxes are represented by a 2x2 sprite:
+  - Tile 19: Top-left corner
+  - Tile 20: Top-right corner
+  - Tile 21: Bottom-left corner
+  - Tile 22: Bottom-right corner
+  
+  Defined in `InicializarTeselas()` (source/main.c:1101-1104)
+</Accordion>
+
+### Push Conditions
+
+A box can only be pushed if:
+
+<Steps>
+  <Step title="Adjacent to Player">
+    Box must be exactly 2 tiles away in the push direction (player is 2x2, box is 2x2)
+  </Step>
+  
+  <Step title="Clear Destination">
+    The tile 4 spaces away must not contain:
+    - Void (tile 18)
+    - Another box (tile 19)
+    - Wall (tile 26)
+    - Enemy (tiles 5 or 42)
+  </Step>
+  
+  <Step title="Movement Available">
+    Player must have at least 1 movement point remaining
+  </Step>
+</Steps>
+
+<Warning>
+**Blocked Push:** If a box cannot be pushed (wall or another obstacle behind it), the player also cannot move into that space. This consumes a movement point without changing the board state.
+</Warning>
+
+### Box Detection on Movement
+
+```c
+// From source/main.c:276-277 (checking for box during upward movement)
+if(mapMemory[(posJugFila-2)*32+posJugColumna] == 19){
+    MoverObstaculo(0);  // Direction 0 = up
+}
+```
+
+Directions:
+- `0` = Up/North
+- `1` = Down/South
+- `2` = Left/West
+- `3` = Right/East
+
+## Enemy Interaction
+
+### Enemy Behavior
+
+Enemies are stationary obstacles that can be eliminated by pushing them into hazards.
+
+<Info>
+**Enemy Storage:** Up to 10 enemies can exist per level, stored in the `posicionesEnemigo` array with position and alive status (source/main.c:148).
+</Info>
+
+### Enemy Pushing
+
+The `MoverEnemigo()` function (source/main.c:518-598) handles enemy interactions:
+
+```c
+// From source/main.c:519-534 (pushing enemy upward)
+void MoverEnemigo(int direccion, int enemigoActual){
+    if(direccion == 0){
+        // Check if enemy can move (no void, box, wall, or other enemy)
+        if(mapMemory[(posJugFila-4)*32+posJugColumna] != 18 && 
+           mapMemory[(posJugFila-4)*32+posJugColumna] != 19 && 
+           mapMemory[(posJugFila-4)*32+posJugColumna] != 5 && 
+           mapMemory[(posJugFila-4)*32+posJugColumna] != 26){
+            // Move enemy to new position
+            mapMemory[(posJugFila-4)*32+posJugColumna] = 5;
+            // ... update other tiles
+            posicionesEnemigo[enemigoActual].y = posJugFila-4;
+            posicionesEnemigo[enemigoActual].x = posJugColumna;
+        }else{ 
+            // Enemy is eliminated
+            posicionesEnemigo[enemigoActual].vivo = false;
+            puedeJugadorMoverse = false;  // Player doesn't move
+        }
+        // Clear old enemy position
+    }
+}
+```
+
+<Accordion title="Enemy Tile IDs">
+  **Frame 1 (tiles 5, 14, 15, 16):**
+  - Tile 5: Top-left
+  - Tile 14: Top-right
+  - Tile 15: Bottom-left
+  - Tile 16: Bottom-right
+  
+  **Frame 2 (tiles 42, 43, 44, 45):**
+  - Tile 42: Top-left
+  - Tile 43: Top-right
+  - Tile 44: Bottom-left
+  - Tile 45: Bottom-right
+  
+  Defined in `InicializarTeselas()` (source/main.c:1094-1097, 1123-1126)
+</Accordion>
+
+### Elimination Mechanics
+
+<Tabs>
+  <Tab title="How to Eliminate">
+    Push an enemy into:
+    - **Void tiles** (tile 18)
+    - **Boxes** (tile 19)
+    - **Walls** (tiles 26, 27, 28)
+    - **Other enemies** (tiles 5 or 42)
+    
+    When eliminated:
+    1. Enemy's `vivo` status set to `false`
+    2. Player prevented from moving (`puedeJugadorMoverse = false`)
+    3. Movement point still consumed
+    4. Enemy sprite removed from animation updates
+  </Tab>
+  
+  <Tab title="Enemy Identification">
+    The game tracks which enemy is being pushed:
+    
+    ```c
+    // From source/main.c:281-288
+    int enemActual=-1;
+    for (int i=0; i<numeroDeEnemigos && enemActual == -1; i++){
+        if(posJugFila-2==posicionesEnemigo[i].y && posJugColumna==posicionesEnemigo[i].x){
+            enemActual = i;
+        }
+    }
+    MoverEnemigo(0, enemActual);
+    ```
+    
+    This ensures the correct enemy's animation is updated or stopped.
+  </Tab>
+</Tabs>
+
+## Stamina/Movement System
+
+### Movement Counter
+
+Each level has a predefined stamina limit:
+
+```c
+// From source/main.c:49-53
+#define MOVIMIENTOS_NIV1 18
+#define MOVIMIENTOS_NIV2 19
+#define MOVIMIENTOS_NIV3 23
+#define MOVIMIENTOS_NIV4 21
+#define MOVIMIENTOS_NIV5 24
+```
+
+### Stamina Consumption
+
+Every action that changes the board state consumes 1 movement:
+
+```c
+// From source/main.c:316-321 (example from upward movement)
+movimientosJugador--;
+puedeJugadorMoverse = true;
+ActualizarBarraMovimientos();
+```
+
+<Note>
+**Key Detail:** Movement points are consumed even when pushing fails. If you push a box against a wall, you lose a movement without the board changing.
+</Note>
+
+### Visual Stamina Bar
+
+The `ActualizarBarraMovimientos()` function (source/main.c:853-862) updates the green stamina bar:
+
+```c
+void ActualizarBarraMovimientos(){
+    int pixelesSegmento = ALTO_BARRA_ESTAMINA/maximoMovimientosJugador;
+    
+    // Clears pixels based on movements used
+    for(int lin = COMIENZO_LINEA_BARRA_ESTAMINA; 
+        lin < ALTO_BARRA_ESTAMINA - (ALTO_BARRA_ESTAMINA - (pixelesSegmento * (maximoMovimientosJugador-movimientosJugador)+1)); 
+        lin++){
+        for(int col=COMIENZO_COLUMNA_BARRA_ESTAMINA; col<ANCHO_BARRA_ESTAMINA; col++){
+            fb[lin*256+col] = RGB15(0,0,0);  // Turn to black
+        }
+    }
+}
+```
+
+**Bar Dimensions:**
+- Width: 32 pixels (`ANCHO_BARRA_ESTAMINA`)
+- Height: 155 pixels (`ALTO_BARRA_ESTAMINA`)
+- Position: Line 38, Column 20 (source/main.c:44-47)
+- Color: Green RGB15(0,30,0) when full (source/main.c:811)
+
+## Dialog and Quiz System
+
+### Dialog Creation
+
+The `CrearDialogo()` function (source/main.c:939-975) displays full-screen dialogs with two-choice answers:
+
+```c
+bool CrearDialogo(unsigned int imagen[], int opcionCorrecta){
+    timerPause(1);  // Pause animations
+    esActivoBotonReinicio=false;  // Disable restart button
+    
+    dmaCopy(imagen, VRAM_A, 256*192*2);  // Display image
+    REG_DISPCNT = MODE_FB0;
+    
+    opcionElegida=-1;  // Reset choice
+    
+    u32 keys;
+    while(opcionElegida == -1){  // Wait for input
+        scanKeys();
+        keys = keysCurrent();
+        if(keys & KEY_TOUCH && esActivoBotonesDialogos == true){
+            touchRead(&posicionXY);
+            // Check button 1 bounds
+            if((posicionXY.px >= puntosBoton1[0].x && posicionXY.px <= puntosBoton1[1].x) && 
+               (posicionXY.py >= puntosBoton1[0].y && posicionXY.py <= puntosBoton1[1].y)){
+                opcionElegida = 0;
+            }
+            // Check button 2 bounds
+            else if((posicionXY.px >= puntosBoton2[0].x && posicionXY.px <= puntosBoton2[1].x) && 
+                    (posicionXY.py >= puntosBoton2[0].y && posicionXY.py <= puntosBoton2[1].y)){
+                opcionElegida = 1;
+            }
+        }
+        swiWaitForVBlank();
+    }
+    
+    return (opcionElegida == opcionCorrecta);
+}
+```
+
+### Touch Regions
+
+Dialog buttons are defined by coordinate pairs:
+
+```c
+// From source/main.c:123-130
+struct PuntoPantalla puntosBoton1 [2]={
+    {50,138},   // Top-left
+    {213,161}   // Bottom-right
+};
+struct PuntoPantalla puntosBoton2 [2]={
+    {50,165},   // Top-left
+    {213,189}   // Bottom-right
+};
+```
+
+### Quiz Flow Management
+
+The `ConsultarSistemaDialogo()` function (source/main.c:658-774) manages quiz sequences:
+
+```c
+// From source/main.c:664-679 (Level 1 quiz example)
+case 0:  // Level 1
+    if(esJuegoReiniciado == false && 
+       CrearDialogo(Pregunta1_1Bitmap,1) && 
+       CrearDialogo(Pregunta1_2Bitmap,0) && 
+       CrearDialogo(Pregunta1_3Bitmap,0)){
+        nivelActual++;
+        CrearDialogo(PreguntasAcertadasBitmap,2);  // Success screen
+        mapaAcutal = nivel2;
+        GenerarNivel(nivel2,HUDBitmap,MOVIMIENTOS_NIV2);
+    }else{
+        if(esJuegoReiniciado == false){
+            CrearDialogo(PreguntaFallidaBitmap,2);  // Failure screen
+        }
+        esJuegoReiniciado = false;
+        GenerarNivel(nivel1,HUDBitmap,MOVIMIENTOS_NIV1);  // Restart
+    }
+    break;
+```
+
+<Info>
+**Answer Parameter:** When `opcionCorrecta` is 2, the dialog is informational (cinematics, success/failure screens) and any touch input advances.
+</Info>
+
+## Collision Detection
+
+### Tile-Based Collision
+
+All collision is tile-based with specific tile IDs representing different obstacles:
+
+<CardGroup cols={2}>
+  <Card title="Void" icon="ban">
+    **Tile ID: 18**
+    
+    Black empty space - completely impassable
+  </Card>
+  
+  <Card title="Walls" icon="wall-brick">
+    **Tile IDs: 17, 24, 26, 27, 28**
+    
+    Different wall orientations - all impassable
+  </Card>
+  
+  <Card title="Boxes" icon="box">
+    **Tile ID: 19** (top-left)
+    
+    Pushable if space beyond is clear
+  </Card>
+  
+  <Card title="Enemies" icon="skull">
+    **Tile IDs: 5, 42** (top-left)
+    
+    Pushable and eliminatable
+  </Card>
+</CardGroup>
+
+### Collision Check Order
+
+For each movement direction, the game checks:
+
+1. **Boundary check** - Is player at edge of map?
+2. **Void/wall check** - Is target tile impassable?
+3. **Box check** - Is there a box? Can it be pushed?
+4. **Enemy check** - Is there an enemy? Can it be pushed?
+5. **Movement execution** - If all checks pass, move player
+
+```c
+// From source/main.c:274-294 (collision check sequence for upward movement)
+if (movimientosJugador > 0 && REG_KEYINPUT == 0x03BF && posJugFila > 0 && 
+    esPartidaAcabada==false && mapMemory[(posJugFila-1)*32+posJugColumna] != 18 && 
+    mapMemory[(posJugFila-1)*32+posJugColumna] != 28){  // Boundary + basic collision
+    
+    if(mapMemory[(posJugFila-2)*32+posJugColumna] == 19){  // Box check
+        MoverObstaculo(0);
+    }else if(mapMemory[(posJugFila-2)*32+posJugColumna] == 5 || 
+             mapMemory[(posJugFila-2)*32+posJugColumna] == 42){  // Enemy check
+        // Find and move enemy
+        MoverEnemigo(0,enemActual);
+    }
+    
+    // Final check: Can player actually move?
+    if(mapMemory[(posJugFila-2)*32+posJugColumna] != 19 && 
+       mapMemory[(posJugFila-2)*32+posJugColumna] != 5 && 
+       puedeJugadorMoverse == true){
+        // Execute movement
+    }
+}
+```
+
+### Ground Tile Detection
+
+The `ComprobarSuelo()` function (source/main.c:446-455) identifies original floor tiles:
+
+```c
+int ComprobarSuelo(int posicion, u16 mapa[]){
+    switch(mapa[posicion]){
+        case 0: return 1;   // Player start → floor
+        case 1: return 1;   // Floor → floor
+        case 2: return 2;   // Exit → exit
+        case 3: return 3;   // Grass → grass
+        case 5: return 3;   // Enemy → grass
+        default: return 1;  // Default → floor
+    }
+}
+```
+
+This ensures proper tile restoration when entities move.

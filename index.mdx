@@ -1,97 +1,238 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Una Aventura Inesperada"
+description: "A puzzle adventure game for Nintendo DS built with DevkitPro and C"
+mode: "custom"
 ---
 
-## Setting up
+<div className="relative overflow-hidden py-20 dark:bg-[#0f1117] bg-white">
+  <div className="max-w-6xl mx-auto px-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold dark:text-gray-100 text-gray-900 mb-6">
+          Una Aventura Inesperada
+        </h1>
+        <p className="text-lg sm:text-xl dark:text-gray-400 text-gray-600 max-w-2xl mb-8">
+          A classic puzzle adventure game for Nintendo DS featuring grid-based gameplay, animated characters, and progressive levels with quiz challenges.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-6 py-3 rounded-lg font-semibold text-white transition-colors"
+            style={{ backgroundColor: '#8B4513' }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#A0522D'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#8B4513'}
+          >
+            Get Started
+          </a>
+          <a 
+            href="/gameplay/overview" 
+            className="inline-flex items-center px-6 py-3 rounded-lg font-semibold dark:text-gray-100 text-gray-900 dark:bg-white/10 bg-gray-100 dark:border-white/20 border-gray-200 border transition-colors dark:hover:bg-white/20 hover:bg-gray-200"
+          >
+            Explore Gameplay
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 flex justify-center">
+        <div className="dark:bg-[#1a1d27] bg-gray-50 dark:border-[#27272a] border-gray-200 border rounded-2xl p-8 max-w-md">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white" style={{ backgroundColor: '#8B4513' }}>
+                🎮
+              </div>
+              <div>
+                <div className="font-semibold dark:text-gray-100 text-gray-900">Grid-based Puzzles</div>
+                <div className="text-sm dark:text-gray-400 text-gray-600">Sokoban-style mechanics</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white" style={{ backgroundColor: '#8B4513' }}>
+                📱
+              </div>
+              <div>
+                <div className="font-semibold dark:text-gray-100 text-gray-900">Dual Screen UI</div>
+                <div className="text-sm dark:text-gray-400 text-gray-600">Nintendo DS interface</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white" style={{ backgroundColor: '#8B4513' }}>
+                🎨
+              </div>
+              <div>
+                <div className="font-semibold dark:text-gray-100 text-gray-900">Animated Sprites</div>
+                <div className="text-sm dark:text-gray-400 text-gray-600">Character animations</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold dark:text-gray-100 text-gray-900 mb-4">
+    Quick Start
+  </h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">
+    Get started with Una Aventura Inesperada in just a few steps.
+  </p>
+  
+  <Steps>
+    <Step title="Set up DevkitPro">
+      Install DevkitPro ARM toolchain for Nintendo DS development. Download from the official DevkitPro website and follow platform-specific installation instructions.
+    </Step>
+    <Step title="Clone the repository">
+      Get the source code from GitHub:
+      ```bash
+      git clone https://github.com/GomezJuanJose/UnaAventuraInesperada.git
+      cd UnaAventuraInesperada
+      ```
+    </Step>
+    <Step title="Build the game">
+      Compile the game using the provided build system:
+      ```bash
+      make
+      ```
+      This will generate a `.nds` ROM file that can be run on Nintendo DS hardware or emulators.
+    </Step>
+    <Step title="Run on emulator or hardware">
+      Load the generated ROM file into a Nintendo DS emulator like DeSmuME or transfer it to a DS flashcart to play on real hardware.
+    </Step>
+  </Steps>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold dark:text-gray-100 text-gray-900 mb-4">
+    Explore the Documentation
+  </h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">
+    Learn about the game design, development process, and technical implementation.
+  </p>
+  
+  <CardGroup cols={2}>
     <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      title="Game Design"
+      icon="gamepad"
+      href="/gameplay/overview"
+    >
+      Learn about gameplay mechanics, levels, controls, and the puzzle system.
+    </Card>
+    <Card
+      title="Development Guide"
+      icon="code"
+      href="/development/architecture"
+    >
+      Understand the code architecture, setup process, and asset pipeline.
+    </Card>
+    <Card
+      title="Technical Reference"
+      icon="book-open"
+      href="/reference/game-loop"
+    >
+      Deep dive into the game loop, interrupts, rendering, and tile system.
+    </Card>
+    <Card
+      title="Quick Start"
+      icon="rocket"
+      href="/quickstart"
+    >
+      Get up and running quickly with step-by-step setup instructions.
+    </Card>
+  </CardGroup>
+</div>
 
-## Create beautiful pages
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold dark:text-gray-100 text-gray-900 mb-4">
+    Key Features
+  </h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">
+    What makes Una Aventura Inesperada special.
+  </p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="dark:bg-[#1a1d27] bg-gray-50 dark:border-[#27272a] border-gray-200 border rounded-xl p-6">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 text-white" style={{ backgroundColor: '#8B4513' }}>
+          🧩
+        </div>
+        <div>
+          <h3 className="font-semibold dark:text-gray-100 text-gray-900 mb-2">Grid-Based Puzzles</h3>
+          <p className="text-sm dark:text-gray-400 text-gray-600">
+            Sokoban-style box pushing mechanics with strategic movement planning and limited stamina.
+          </p>
+        </div>
+      </div>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 dark:border-[#27272a] border-gray-200 border rounded-xl p-6">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 text-white" style={{ backgroundColor: '#8B4513' }}>
+          📊
+        </div>
+        <div>
+          <h3 className="font-semibold dark:text-gray-100 text-gray-900 mb-2">Progressive Levels</h3>
+          <p className="text-sm dark:text-gray-400 text-gray-600">
+            5 challenging levels with quiz questions to test your knowledge and unlock progression.
+          </p>
+        </div>
+      </div>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 dark:border-[#27272a] border-gray-200 border rounded-xl p-6">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 text-white" style={{ backgroundColor: '#8B4513' }}>
+          🎭
+        </div>
+        <div>
+          <h3 className="font-semibold dark:text-gray-100 text-gray-900 mb-2">Animated Characters</h3>
+          <p className="text-sm dark:text-gray-400 text-gray-600">
+            Smooth sprite animations for player, NPCs, and enemies with tile-based rendering.
+          </p>
+        </div>
+      </div>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 dark:border-[#27272a] border-gray-200 border rounded-xl p-6">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 text-white" style={{ backgroundColor: '#8B4513' }}>
+          💬
+        </div>
+        <div>
+          <h3 className="font-semibold dark:text-gray-100 text-gray-900 mb-2">Interactive Dialogs</h3>
+          <p className="text-sm dark:text-gray-400 text-gray-600">
+            Touch-based dialog system with cinematics and story sequences throughout the adventure.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-20 mb-16 max-w-5xl mx-auto px-6">
+  <div className="dark:bg-[#1a1d27] bg-gray-50 dark:border-[#27272a] border-gray-200 border rounded-2xl p-8 sm:p-12 text-center">
+    <h2 className="text-2xl sm:text-3xl font-bold dark:text-gray-100 text-gray-900 mb-4">
+      Ready to Build?
+    </h2>
+    <p className="text-base dark:text-gray-400 text-gray-600 max-w-2xl mx-auto mb-8">
+      Start developing with Una Aventura Inesperada or learn more about the game's technical implementation.
+    </p>
+    <div className="flex flex-wrap justify-center gap-4">
+      <a 
+        href="/development/setup" 
+        className="inline-flex items-center px-6 py-3 rounded-lg font-semibold text-white transition-colors"
+        style={{ backgroundColor: '#8B4513' }}
+        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#A0522D'}
+        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#8B4513'}
+      >
+        Development Setup
+      </a>
+      <a 
+        href="https://github.com/GomezJuanJose/UnaAventuraInesperada" 
+        className="inline-flex items-center px-6 py-3 rounded-lg font-semibold dark:text-gray-100 text-gray-900 dark:bg-white/10 bg-white dark:border-white/20 border-gray-300 border transition-colors dark:hover:bg-white/20 hover:bg-gray-50"
+        target="_blank"
+      >
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</div>

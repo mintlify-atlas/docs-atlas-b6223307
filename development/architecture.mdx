@@ -1,0 +1,233 @@
+---
+title: Architecture
+description: Project structure and code organization for Una Aventura Inesperada
+---
+
+## Project Structure
+
+Una Aventura Inesperada is a Nintendo DS puzzle game written in C using devkitPro. The project follows a simple flat structure with all source files in a single directory.
+
+### File Organization
+
+```
+source/
+├── main.c              # Main game logic and entry point
+├── teselas.h           # Tile definitions and sprite data
+├── menuPrincipal.h/.s  # Main menu graphics
+├── menuCreditos.h/.s   # Credits screen graphics
+├── HUD.h/.s            # Heads-up display graphics
+├── CinematicaInicio*.h/.s  # Opening cinematic frames
+├── CinematicaFinal*.h/.s   # Ending cinematic frames
+└── Pregunta*.h/.s      # Question screen graphics
+```
+
+<Note>
+Each graphic asset has two files: a `.h` header file with metadata and a `.s` assembly file containing the actual bitmap data.
+</Note>
+
+## Code Organization
+
+The game is structured around a single `main.c` file (`~/workspace/source/source/main.c:1`) containing all game logic.
+
+### Key Components
+
+<Steps>
+  <Step title="Hardware Initialization">
+    The game initializes Nintendo DS hardware including:
+    - VRAM configuration for dual screens
+    - Background graphics layers
+    - Tile and map memory allocation
+    - Color palette setup (RGB15 format)
+
+    ```c
+    REG_POWERCNT = POWER_ALL_2D;
+    REG_DISPCNT_SUB = MODE_0_2D | DISPLAY_BG0_ACTIVE;
+    VRAM_C_CR = VRAM_ENABLE | VRAM_C_SUB_BG;
+    ```
+  </Step>
+
+  <Step title="Game Loop">
+    The main loop handles level resets and game state management:
+
+    ```c
+    while(1) {
+        if(esActivoBotonReinicio == true) {
+            scanKeys();
+            keys = keysCurrent();
+            if(keys & KEY_TOUCH && esActivoBotonesDialogos == true) {
+                touchRead(&posicionXY);
+                // Check if restart button is pressed
+                if((posicionXY.px >= puntosReinicioNivelBoton[0].x && ...) {
+                    esJuegoReiniciado = true;
+                    ConsultarSistemaDialogo();
+                }
+            }
+            swiWaitForVBlank();
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Interrupt Handlers">
+    Three main interrupt handlers manage game events:
+    - **Keyboard/D-Pad input**: `TeclasJugador()` - Processes player movement
+    - **Animation timer**: `ActualizarAnimacion()` - Updates sprite frames
+    - **Dialog timer**: `HabilitarBotonesDialogo()` - Prevents accidental input
+  </Step>
+</Steps>
+
+## Key Data Structures
+
+### PuntoPantalla
+
+Defines touchscreen button boundaries (`~/workspace/source/source/main.c:76`):
+
+```c
+struct PuntoPantalla {
+    int x;
+    int y;
+};
+```
+
+**Usage Example:**
+```c
+struct PuntoPantalla puntosBoton1[2] = {
+    {50, 138},   // Top-left corner
+    {213, 161}   // Bottom-right corner
+};
+```
+
+### PosicionEnemigo
+
+Tracks enemy state and position (`~/workspace/source/source/main.c:82`):
+
+```c
+struct PosicionEnemigo {
+    int x;      // Column position
+    int y;      // Row position  
+    int vivo;   // Alive status (true/false)
+};
+```
+
+The game maintains an array of up to 10 enemies:
+```c
+struct PosicionEnemigo posicionesEnemigo[10];
+```
+
+## Main Game Loop Architecture
+
+### State Management
+
+The game uses boolean flags to manage state:
+
+```c
+bool esPartidaAcabada = true;      // Game over state
+bool jugadorVivo = false;           // Player alive
+bool puedeJugadorMoverse = true;   // Movement allowed
+bool esActivoBotonReinicio = false; // Restart button active
+bool esJuegoComenzado = false;      // Game started
+bool esFotograma1Activo = true;    // Animation frame toggle
+```
+
+### Movement System
+
+Player movement is constrained by:
+- Available moves (`movimientosJugador`)
+- Map boundaries (32x24 tile grid)
+- Collision detection with walls, enemies, and boxes
+
+<CodeGroup>
+```c Movement Tracking
+int movimientosJugador = 20;        // Current moves
+int maximoMovimientosJugador = 20;  // Max moves for level
+int posJugFila = 22, posJugColumna = 16;  // Player position
+```
+
+```c Movement Constants
+#define MOVIMIENTOS_NIV1 18
+#define MOVIMIENTOS_NIV2 19
+#define MOVIMIENTOS_NIV3 23
+#define MOVIMIENTOS_NIV4 21
+#define MOVIMIENTOS_NIV5 24
+```
+</CodeGroup>
+
+## Memory Management
+
+### VRAM Organization
+
+The game uses two VRAM banks:
+
+- **VRAM_A**: Main screen framebuffer (256x192x2 bytes)
+- **VRAM_C**: Sub screen background tiles and maps
+
+```c
+// Tile memory for sprites (in VRAM_C)
+u8* tileMemory = (u8*) BG_TILE_RAM_SUB(1);
+
+// Map memory for level layout
+u16* mapMemory = (u16*) BG_MAP_RAM_SUB(0);
+```
+
+### Tile Memory Layout
+
+Tiles are loaded sequentially into VRAM using DMA:
+
+```c
+dmaCopy(t_jugadorF1Parte1, tileMemory, sizeof(t_jugadorF1Parte1));        // Index 0
+dmaCopy(t_jugadorF1Parte2, tileMemory+(64*8), sizeof(t_jugadorF1Parte2)); // Index 8
+dmaCopy(t_salida, tileMemory+(64*1), sizeof(t_salida));                   // Index 1
+```
+
+<Note>
+Each 8x8 tile occupies 64 bytes in memory. Tile indices are calculated as `(offset / 64)`.
+</Note>
+
+### Map Memory
+
+The game uses a 32x24 tile map (768 tiles total):
+
+```c
+u16 nivel1[768] = {
+    18,18, 18,18, 18,18, // Row 0 (empty tiles)
+    // ... level layout data
+};
+```
+
+Map positions are calculated as: `position = row * 32 + column`
+
+## Function Overview
+
+### Core Functions
+
+| Function | Purpose | Location |
+|----------|---------|----------|
+| `main()` | Entry point, hardware init, main loop | `main.c:157` |
+| `ConfigurarInterrupciones()` | Sets up interrupt handlers | `main.c:242` |
+| `InicializarTeselas()` | Loads all tile graphics | `main.c:1065` |
+| `GenerarNivel()` | Renders level from map data | `main.c:792` |
+| `CrearMenu()` | Displays main menu | `main.c:871` |
+| `CrearDialogo()` | Shows question dialogs | `main.c:939` |
+
+### Movement Functions
+
+| Function | Purpose | Location |
+|----------|---------|----------|
+| `TeclasJugador()` | Handles player input | `main.c:271` |
+| `MoverEnemigo()` | Moves or eliminates enemies | `main.c:518` |
+| `MoverObstaculo()` | Pushes movable boxes | `main.c:605` |
+| `ComprobarSuelo()` | Returns original floor tile | `main.c:446` |
+| `ElegirFondoJugador()` | Selects player sprite with background | `main.c:464` |
+
+### Game Logic Functions
+
+| Function | Purpose | Location |
+|----------|---------|----------|
+| `ConsultarSistemaDialogo()` | Manages level progression | `main.c:658` |
+| `ActualizarBarraMovimientos()` | Updates stamina bar | `main.c:853` |
+| `ActualizarAnimacion()` | Cycles sprite animations | `main.c:981` |
+| `HabilitarBotonesDialogo()` | Re-enables dialog buttons | `main.c:780` |
+
+<Note>
+The game uses a 2x2 tile grid for all sprites (player, enemies, NPCs, boxes), allowing for 16x16 pixel graphics.
+</Note>

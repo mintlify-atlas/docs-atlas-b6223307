@@ -1,0 +1,359 @@
+---
+title: Development Setup
+description: Setting up the development environment for Una Aventura Inesperada
+---
+
+## Prerequisites
+
+To build Una Aventura Inesperada, you need:
+
+- **devkitPro** - Nintendo DS toolchain
+- **libnds** - Nintendo DS library
+- **ARM cross-compiler** - For ARM9/ARM7 processors
+- **Git** - For version control
+
+<Note>
+This project targets the Nintendo DS hardware and requires specific cross-compilation tools. Standard C compilers will not work.
+</Note>
+
+## Installing devkitPro
+
+<Steps>
+  <Step title="Download devkitPro">
+    Visit the official devkitPro website and download the installer for your platform:
+    
+    - **Windows**: Use the graphical installer
+    - **macOS**: Use Homebrew or the pkg installer  
+    - **Linux**: Use the pacman-based installer
+
+    ```bash Linux Installation
+    wget https://github.com/devkitPro/pacman/releases/latest/download/devkitpro-pacman.amd64.deb
+    sudo dpkg -i devkitpro-pacman.amd64.deb
+    ```
+  </Step>
+
+  <Step title="Install NDS Development Tools">
+    Once devkitPro is installed, install the Nintendo DS development package:
+
+    ```bash
+    sudo dkp-pacman -S nds-dev
+    ```
+
+    This installs:
+    - devkitARM (ARM cross-compiler)
+    - libnds (Nintendo DS library)
+    - default ARM7 binary
+    - tools (ndstool, grit, etc.)
+  </Step>
+
+  <Step title="Set Environment Variables">
+    Add these to your shell configuration file (`~/.bashrc`, `~/.zshrc`, etc.):
+
+    ```bash
+    export DEVKITPRO=/opt/devkitpro
+    export DEVKITARM=$DEVKITPRO/devkitARM
+    export PATH=$DEVKITARM/bin:$PATH
+    ```
+
+    Reload your shell:
+    ```bash
+    source ~/.bashrc
+    ```
+  </Step>
+
+  <Step title="Verify Installation">
+    Check that the ARM compiler is available:
+
+    ```bash
+    arm-none-eabi-gcc --version
+    ```
+
+    You should see output like:
+    ```
+    arm-none-eabi-gcc (devkitARM release XX) X.X.X
+    ```
+  </Step>
+</Steps>
+
+## Required Dependencies
+
+### Core Libraries
+
+The project uses these libnds headers (`~/workspace/source/source/main.c:9`):
+
+```c
+#include <nds.h>          // Main NDS library
+#include <stdio.h>        // Standard I/O
+#include <stdlib.h>       // Standard library  
+#include <nds/ndstypes.h> // NDS type definitions
+```
+
+### libnds Features Used
+
+- **Video Engine**: Background layers, VRAM management
+- **Input System**: Touch screen, D-pad, buttons
+- **Interrupts**: VBlank, timers, keyboard
+- **DMA**: Fast memory transfers for graphics
+- **Timers**: Animation and input debouncing
+
+## Project Directory Structure
+
+Clone and explore the project:
+
+```bash
+git clone <repository-url>
+cd una-aventura-inesperada
+```
+
+### Expected Structure
+
+```
+.
+├── source/
+│   ├── main.c              # Main game code
+│   ├── teselas.h           # Tile definitions
+│   ├── menuPrincipal.h     # Menu graphics header
+│   ├── menuPrincipal.s     # Menu graphics data
+│   ├── HUD.h               # HUD graphics header
+│   ├── HUD.s               # HUD graphics data
+│   ├── Cinematica*.h/.s    # Cinematic frames
+│   └── Pregunta*.h/.s      # Question screens
+├── Makefile                # Build configuration
+└── README.md               # Project documentation
+```
+
+<Note>
+The actual project currently has a flat structure in `source/` without a Makefile in the repository. You may need to create one based on the standard devkitPro NDS template.
+</Note>
+
+## Creating a Makefile
+
+If the project doesn't include a Makefile, create one based on the devkitPro template:
+
+<CodeGroup>
+```makefile Basic Makefile
+#---------------------------------------------------------------------------------
+.SUFFIXES:
+#---------------------------------------------------------------------------------
+
+ifeq ($(strip $(DEVKITARM)),)
+$(error "DEVKITARM must be set in your environment")
+endif
+
+include $(DEVKITARM)/ds_rules
+
+#---------------------------------------------------------------------------------
+# TARGET is the name of the output
+# BUILD is the directory where object files & intermediate files will be placed
+# SOURCES is a list of directories containing source code
+# DATA is a list of directories containing data files
+# INCLUDES is a list of directories containing header files
+#---------------------------------------------------------------------------------
+TARGET      := una-aventura-inesperada
+BUILD       := build
+SOURCES     := source
+DATA        := data
+INCLUDES    := include
+
+#---------------------------------------------------------------------------------
+# options for code generation
+#---------------------------------------------------------------------------------
+ARCH    := -mthumb -mthumb-interwork
+
+CFLAGS  := -g -Wall -O2\
+           -march=armv5te -mtune=arm946e-s\
+           $(ARCH)
+
+CFLAGS  += $(INCLUDE) -DARM9
+CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions
+
+ASFLAGS := -g $(ARCH)
+LDFLAGS  = -specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+
+#---------------------------------------------------------------------------------
+# any extra libraries we wish to link with the project
+#---------------------------------------------------------------------------------
+LIBS    := -lnds9
+
+#---------------------------------------------------------------------------------
+# list of directories containing libraries
+#---------------------------------------------------------------------------------
+LIBDIRS := $(LIBNDS)
+
+#---------------------------------------------------------------------------------
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+#---------------------------------------------------------------------------------
+
+export OUTPUT   := $(CURDIR)/$(TARGET)
+
+export VPATH    := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))\
+                   $(foreach dir,$(DATA),$(CURDIR)/$(dir))
+
+export DEPSDIR  := $(CURDIR)/$(BUILD)
+
+CFILES      := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+CPPFILES    := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
+SFILES      := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+
+export OFILES   := $(CFILES:.c=.o) $(CPPFILES:.cpp=.o) $(SFILES:.s=.o)
+
+export INCLUDE  := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir))\
+                   $(foreach dir,$(LIBDIRS),-I$(dir)/include)\
+                   -I$(CURDIR)/$(BUILD)
+
+export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+
+.PHONY: $(BUILD) clean
+
+#---------------------------------------------------------------------------------
+$(BUILD):
+	@[ -d $@ ] || mkdir -p $@
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+
+#---------------------------------------------------------------------------------
+clean:
+	@echo clean ...
+	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds
+
+#---------------------------------------------------------------------------------
+else
+
+INCLUDE := $(INCLUDE) -I$(CURDIR)/../source
+
+DEPENDS := $(OFILES:.o=.d)
+
+#---------------------------------------------------------------------------------
+# main targets
+#---------------------------------------------------------------------------------
+$(OUTPUT).nds: $(OUTPUT).elf
+$(OUTPUT).elf: $(OFILES)
+
+#---------------------------------------------------------------------------------
+%.bin.o: %.bin
+#---------------------------------------------------------------------------------
+	@echo $(notdir $<)
+	@$(bin2o)
+
+-include $(DEPENDS)
+
+#---------------------------------------------------------------------------------
+endif
+#---------------------------------------------------------------------------------
+```
+
+```makefile With Graphics Conversion
+# Add to the basic Makefile for automatic image conversion
+
+#---------------------------------------------------------------------------------
+# Graphics files
+#---------------------------------------------------------------------------------
+GRAPHICS := graphics
+
+BMPFILES := $(foreach dir,$(GRAPHICS),$(wildcard $(dir)/*.bmp))
+PNGFILES := $(foreach dir,$(GRAPHICS),$(wildcard $(dir)/*.png))
+
+# Convert to .s and .h files
+%.s %.h: %.bmp
+	@echo $(notdir $<)
+	@grit $< -fts -o$(basename $@)
+
+%.s %.h: %.png  
+	@echo $(notdir $<)
+	@grit $< -fts -o$(basename $@)
+```
+</CodeGroup>
+
+## Development Tools
+
+### Essential Tools
+
+<Steps>
+  <Step title="ndstool">
+    Creates .nds ROM files from compiled binaries:
+    
+    ```bash
+    ndstool -c game.nds -9 game.elf
+    ```
+  </Step>
+
+  <Step title="grit">
+    Converts images to NDS-compatible formats:
+    
+    ```bash
+    grit image.png -fts -oimage
+    ```
+    
+    Generates `image.s` (bitmap data) and `image.h` (header)
+  </Step>
+
+  <Step title="arm-none-eabi-gcc">
+    The ARM cross-compiler:
+    
+    ```bash
+    arm-none-eabi-gcc -mthumb -mthumb-interwork -march=armv5te main.c
+    ```
+  </Step>
+</Steps>
+
+### Optional Tools
+
+- **DeSmuME**: Nintendo DS emulator for testing
+- **NO$GBA**: Alternative emulator with debugger
+- **grit**: Image conversion tool (included with devkitPro)
+- **ndstool**: ROM builder (included with devkitPro)
+
+## Configuration Files
+
+### Compiler Flags
+
+For Nintendo DS development, use these flags:
+
+```makefile
+ARCH := -mthumb -mthumb-interwork
+CFLAGS := -g -Wall -O2 -march=armv5te -mtune=arm946e-s $(ARCH)
+CFLAGS += -DARM9
+LDFLAGS := -specs=ds_arm9.specs -g $(ARCH)
+```
+
+**Flag Explanations:**
+- `-mthumb`: Use Thumb instruction set (smaller code)
+- `-march=armv5te`: Target ARMv5TE architecture  
+- `-mtune=arm946e-s`: Optimize for ARM946E-S CPU
+- `-DARM9`: Define ARM9 preprocessor macro
+- `-specs=ds_arm9.specs`: Link for NDS ARM9 processor
+
+### Git Configuration
+
+Create a `.gitignore` file:
+
+```gitignore
+# Build artifacts
+*.elf
+*.nds
+*.o
+*.d
+*.map
+build/
+
+# Editor files
+*.swp
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+```
+
+## Next Steps
+
+Once your environment is set up:
+
+1. Read the [Building](/development/building) guide to compile the game
+2. Check the [Assets](/development/assets) guide to understand the graphics pipeline
+3. Review the [Architecture](/development/architecture) to understand the codebase
+
+<Note>
+If you encounter issues, check that `DEVKITPRO` and `DEVKITARM` environment variables are correctly set.
+</Note>

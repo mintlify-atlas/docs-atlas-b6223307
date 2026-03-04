@@ -1,0 +1,372 @@
+---
+title: 'Interrupt System'
+description: 'IRQ configuration, timer setup, and interrupt handling for input and animations'
+---
+
+## Overview
+
+Una Aventura Inesperada uses the Nintendo DS interrupt system for responsive input handling and time-based animations. The game configures three interrupt sources: **IRQ_KEYS** for player input, **IRQ_TIMER0** for dialog debouncing, and **IRQ_TIMER1** for sprite animation.
+
+## Interrupt Configuration
+
+The `ConfigurarInterrupciones()` function (main.c:242) sets up all interrupt handlers during initialization:
+
+```c
+void ConfigurarInterrupciones() {
+    // Enable keyboard interrupts
+    irqSet(IRQ_KEYS, TeclasJugador);
+    irqEnable(IRQ_KEYS);
+    REG_KEYCNT = 0x7FFF;
+    
+    // Dialog timer (TIMER0)
+    irqEnable(IRQ_TIMER0);
+    irqSet(IRQ_TIMER0, HabilitarBotonesDialogo);
+    TIMER_DATA(0) = 32768;
+    TIMER_CR(0) = TIMER_DIV_1024 | TIMER_ENABLE | TIMER_IRQ_REQ;
+    timerPause(0);
+    
+    // Animation timer (TIMER1)
+    irqEnable(IRQ_TIMER1);
+    irqSet(IRQ_TIMER1, ActualizarAnimacion);
+    TIMER_DATA(1) = 32768;
+    TIMER_CR(1) = TIMER_DIV_1024 | TIMER_ENABLE | TIMER_IRQ_REQ;
+}
+```
+
+## IRQ_KEYS: Player Input
+
+### Configuration
+
+<ParamField path="IRQ_KEYS" type="Interrupt Source">
+  Triggers when configured buttons are pressed on the DS.
+</ParamField>
+
+<ParamField path="REG_KEYCNT" type="u16" default="0x7FFF">
+  Key interrupt control register. The value `0x7FFF` enables interrupts for all buttons.
+  
+  **Special values:**
+  - `0x7FFF` - All buttons enabled (during gameplay)
+  - `0x3FFF` - Reduced button set (during dialogs, main.c:659)
+</ParamField>
+
+### Callback: TeclasJugador()
+
+The `TeclasJugador()` interrupt handler (main.c:271) processes directional input and handles collision detection:
+
+```c
+void TeclasJugador() {
+    // UP button (REG_KEYINPUT == 0x03BF)
+    if (movimientosJugador > 0 && 
+        REG_KEYINPUT == 0x03BF && 
+        posJugFila > 0 && 
+        esPartidaAcabada == false && 
+        mapMemory[(posJugFila-1)*32+posJugColumna] != 18 && 
+        mapMemory[(posJugFila-1)*32+posJugColumna] != 28) {
+        
+        // Box collision at 2 tiles ahead
+        if(mapMemory[(posJugFila-2)*32+posJugColumna] == 19) {
+            MoverObstaculo(0);
+        }
+        // Enemy collision (tiles 5 or 42)
+        else if(mapMemory[(posJugFila-2)*32+posJugColumna] == 5 || 
+                mapMemory[(posJugFila-2)*32+posJugColumna] == 42) {
+            int enemActual = -1;
+            for (int i=0; i<numeroDeEnemigos && enemActual == -1; i++) {
+                if(posJugFila-2 == posicionesEnemigo[i].y && 
+                   posJugColumna == posicionesEnemigo[i].x) {
+                    enemActual = i;
+                }
+            }
+            MoverEnemigo(0, enemActual);
+        }
+        
+        // If path is clear, move player
+        if(mapMemory[(posJugFila-2)*32+posJugColumna] != 19 && 
+           mapMemory[(posJugFila-2)*32+posJugColumna] != 5 && 
+           puedeJugadorMoverse == true) {
+            
+            // Restore floor tiles
+            mapMemory[(posJugFila)*32+posJugColumna] = 
+                ComprobarSuelo((posJugFila)*32+posJugColumna, mapaAcutal);
+            mapMemory[(posJugFila)*32+(posJugColumna+1)] = 
+                ComprobarSuelo((posJugFila)*32+(posJugColumna+1), mapaAcutal);
+            mapMemory[(posJugFila+1)*32+posJugColumna] = 
+                ComprobarSuelo((posJugFila+1)*32+posJugColumna, mapaAcutal);
+            mapMemory[(posJugFila+1)*32+(posJugColumna+1)] = 
+                ComprobarSuelo((posJugFila+1)*32+(posJugColumna+1), mapaAcutal);
+            
+            posJugFila -= 2; // Move 2 tiles (2x2 sprite)
+            
+            // Draw player sprite on new position
+            pos_mapMemory = posJugFila*32 + posJugColumna;
+            mapMemory[pos_mapMemory] = ElegirFondoJugador(0, pos_mapMemory);
+            
+            pos_mapMemory = posJugFila*32 + (posJugColumna+1);
+            mapMemory[pos_mapMemory] = ElegirFondoJugador(1, pos_mapMemory);
+            
+            pos_mapMemory = (posJugFila+1)*32 + posJugColumna;
+            mapMemory[pos_mapMemory] = ElegirFondoJugador(2, pos_mapMemory);
+            
+            pos_mapMemory = (posJugFila+1)*32 + (posJugColumna+1);
+            mapMemory[pos_mapMemory] = ElegirFondoJugador(3, pos_mapMemory);
+        }
+        
+        movimientosJugador--;
+        puedeJugadorMoverse = true;
+        ActualizarBarraMovimientos();
+    }
+    // ... similar code for DOWN (0x037F), LEFT (0x03DF), RIGHT (0x03EF)
+}
+```
+
+### Input Register Values
+
+The `REG_KEYINPUT` register is checked against specific values to detect directional input:
+
+<ParamField path="0x03BF" type="REG_KEYINPUT value">
+  **UP button** pressed
+</ParamField>
+
+<ParamField path="0x037F" type="REG_KEYINPUT value">
+  **DOWN button** pressed (main.c:323)
+</ParamField>
+
+<ParamField path="0x03DF" type="REG_KEYINPUT value">
+  **LEFT button** pressed (main.c:362)
+</ParamField>
+
+<ParamField path="0x03EF" type="REG_KEYINPUT value">
+  **RIGHT button** pressed (main.c:399)
+</ParamField>
+
+<Warning>
+The interrupt only fires when `REG_KEYCNT` is configured. During dialogs, the game sets `REG_KEYCNT = 0x3FFF` (main.c:659) to disable certain inputs, then restores `0x7FFF` when gameplay resumes (main.c:796).
+</Warning>
+
+## IRQ_TIMER0: Dialog Timing
+
+### Purpose
+
+Timer 0 implements **input debouncing** for dialogs. Without this timer, a single screen touch would advance through all dialogs instantly.
+
+### Configuration
+
+```c
+irqEnable(IRQ_TIMER0);
+irqSet(IRQ_TIMER0, HabilitarBotonesDialogo);
+TIMER_DATA(0) = 32768;
+TIMER_CR(0) = TIMER_DIV_1024 | TIMER_ENABLE | TIMER_IRQ_REQ;
+timerPause(0); // Initially paused
+```
+
+<ParamField path="TIMER_DATA(0)" type="u16" default="32768">
+  Initial timer value. The timer counts up from this value to 65535 before overflowing.
+  
+  **Calculation:**
+  - Clock: `BUS_CLOCK / 1024` (see `TIMER_DIV_1024`)
+  - Ticks until overflow: `65535 - 32768 = 32767`
+  - Time: ~0.5 seconds
+</ParamField>
+
+<ParamField path="TIMER_CR(0)" type="Timer Control">
+  Control flags for Timer 0:
+  - `TIMER_DIV_1024` - Divide bus clock by 1024
+  - `TIMER_ENABLE` - Start the timer
+  - `TIMER_IRQ_REQ` - Generate interrupt on overflow
+</ParamField>
+
+### Callback: HabilitarBotonesDialogo()
+
+This simple callback (main.c:780) re-enables dialog button input after the debounce delay:
+
+```c
+void HabilitarBotonesDialogo() {
+    esActivoBotonesDialogos = true;
+    timerPause(0);
+}
+```
+
+### Usage Flow
+
+1. **Dialog opens** - `CrearDialogo()` sets `esActivoBotonesDialogos = false` (main.c:968)
+2. **Player selects option** - Touch input is processed
+3. **Timer starts** - `timerUnpause(0)` called (main.c:965)
+4. **~0.5s later** - `HabilitarBotonesDialogo()` fires, re-enabling buttons
+5. **Timer pauses** - Ready for next dialog
+
+<Note>
+The timer remains paused between dialogs to conserve CPU cycles. It only runs during the debounce period.
+</Note>
+
+## IRQ_TIMER1: Animation Updates
+
+### Purpose
+
+Timer 1 drives sprite animation by toggling between two animation frames (F1 and F2) for the player, NPCs, and enemies.
+
+### Configuration
+
+```c
+irqEnable(IRQ_TIMER1);
+irqSet(IRQ_TIMER1, ActualizarAnimacion);
+TIMER_DATA(1) = 32768;
+TIMER_CR(1) = TIMER_DIV_1024 | TIMER_ENABLE | TIMER_IRQ_REQ;
+// No pause - runs continuously during gameplay
+```
+
+<ParamField path="TIMER_DATA(1)" type="u16" default="32768">
+  Same timing as Timer 0: ~0.5 seconds per frame, resulting in ~2 FPS animation.
+</ParamField>
+
+### Callback: ActualizarAnimacion()
+
+The `ActualizarAnimacion()` interrupt handler (main.c:981) updates all sprite animations:
+
+```c
+void ActualizarAnimacion() {
+    if(esFotograma1Activo == true) {
+        // Update NPC to Frame 1 (tiles 38-41)
+        pos_mapMemory = posNpcFila*32 + posNpcColumna;
+        mapMemory[pos_mapMemory] = 38;
+        
+        pos_mapMemory = posNpcFila*32 + (posNpcColumna+1);
+        mapMemory[pos_mapMemory] = 39;
+        
+        pos_mapMemory = (posNpcFila+1)*32 + posNpcColumna;
+        mapMemory[pos_mapMemory] = 40;
+        
+        pos_mapMemory = (posNpcFila+1)*32 + (posNpcColumna+1);
+        mapMemory[pos_mapMemory] = 41;
+        
+        // Update all living enemies to Frame 1 (tiles 5, 14-16)
+        for(int i = 0; i < numeroDeEnemigos; i++) {
+            if(posicionesEnemigo[i].vivo == true) {
+                pos_mapMemory = posicionesEnemigo[i].y*32 + posicionesEnemigo[i].x;
+                mapMemory[pos_mapMemory] = 5;
+                
+                pos_mapMemory = posicionesEnemigo[i].y*32 + (posicionesEnemigo[i].x+1);
+                mapMemory[pos_mapMemory] = 14;
+                
+                pos_mapMemory = (posicionesEnemigo[i].y+1)*32 + posicionesEnemigo[i].x;
+                mapMemory[pos_mapMemory] = 15;
+                
+                pos_mapMemory = (posicionesEnemigo[i].y+1)*32 + (posicionesEnemigo[i].x+1);
+                mapMemory[pos_mapMemory] = 16;
+            }
+        }
+        esFotograma1Activo = false;
+    } else {
+        // Update NPC to Frame 2 (tiles 30-33)
+        pos_mapMemory = posNpcFila*32 + posNpcColumna;
+        mapMemory[pos_mapMemory] = 30;
+        
+        pos_mapMemory = posNpcFila*32 + (posNpcColumna+1);
+        mapMemory[pos_mapMemory] = 31;
+        
+        pos_mapMemory = (posNpcFila+1)*32 + posNpcColumna;
+        mapMemory[pos_mapMemory] = 32;
+        
+        pos_mapMemory = (posNpcFila+1)*32 + (posNpcColumna+1);
+        mapMemory[pos_mapMemory] = 33;
+        
+        // Update all living enemies to Frame 2 (tiles 42-45)
+        for(int i = 0; i < numeroDeEnemigos; i++) {
+            if(posicionesEnemigo[i].vivo == true) {
+                pos_mapMemory = posicionesEnemigo[i].y*32 + posicionesEnemigo[i].x;
+                mapMemory[pos_mapMemory] = 42;
+                
+                pos_mapMemory = posicionesEnemigo[i].y*32 + (posicionesEnemigo[i].x+1);
+                mapMemory[pos_mapMemory] = 43;
+                
+                pos_mapMemory = (posicionesEnemigo[i].y+1)*32 + posicionesEnemigo[i].x;
+                mapMemory[pos_mapMemory] = 44;
+                
+                pos_mapMemory = (posicionesEnemigo[i].y+1)*32 + (posicionesEnemigo[i].x+1);
+                mapMemory[pos_mapMemory] = 45;
+            }
+        }
+        esFotograma1Activo = true;
+    }
+    
+    // Always update player animation (tiles 0/34, 8/35, 9/36, 10/37)
+    pos_mapMemory = posJugFila*32 + posJugColumna;
+    mapMemory[pos_mapMemory] = ElegirFondoJugador(0, pos_mapMemory);
+    
+    pos_mapMemory = posJugFila*32 + (posJugColumna+1);
+    mapMemory[pos_mapMemory] = ElegirFondoJugador(1, pos_mapMemory);
+    
+    pos_mapMemory = (posJugFila+1)*32 + posJugColumna;
+    mapMemory[pos_mapMemory] = ElegirFondoJugador(2, pos_mapMemory);
+    
+    pos_mapMemory = (posJugFila+1)*32 + (posJugColumna+1);
+    mapMemory[pos_mapMemory] = ElegirFondoJugador(3, pos_mapMemory);
+}
+```
+
+### Animation Frame Mapping
+
+<ParamField path="esFotograma1Activo" type="bool">
+  Global flag toggled by `ActualizarAnimacion()` to alternate between Frame 1 and Frame 2.
+</ParamField>
+
+**NPC Animation:**
+- Frame 1: Tiles 38, 39, 40, 41
+- Frame 2: Tiles 30, 31, 32, 33
+
+**Enemy Animation:**
+- Frame 1: Tiles 5, 14, 15, 16
+- Frame 2: Tiles 42, 43, 44, 45
+
+**Player Animation:**
+- Frame 1: Tiles 0/6, 8/11, 9/12, 10/13 (depends on floor type)
+- Frame 2: Tiles 34, 35, 36, 37
+
+<Note>
+The player's animation tiles are selected by `ElegirFondoJugador()` (main.c:464), which chooses different tiles based on the underlying floor type to create composite sprites.
+</Note>
+
+## Timer Control
+
+The game pauses and resumes timers to manage performance:
+
+### Pausing Timers
+
+```c
+timerPause(0);  // Stop dialog timer (main.c:253, 782)
+timerPause(1);  // Stop animations during dialogs (main.c:940)
+```
+
+### Resuming Timers
+
+```c
+timerUnpause(0); // Start dialog debounce (main.c:965)
+timerUnpause(1); // Resume animations in gameplay (main.c:794)
+```
+
+<Warning>
+**Timer 1 is paused during dialogs** (main.c:940) to freeze animations and improve performance. It resumes when `GenerarNivel()` is called (main.c:794).
+</Warning>
+
+## Interrupt Priorities
+
+The Nintendo DS processes interrupts in hardware-defined priority order:
+
+1. **IRQ_KEYS** - Highest priority (immediate input response)
+2. **IRQ_TIMER0** - Medium priority (dialog timing)
+3. **IRQ_TIMER1** - Lower priority (animations can wait)
+
+In practice, conflicts are rare because:
+- Input interrupts fire only on button changes
+- Timers overflow at 0.5-second intervals
+- Animations update tile indices (fast operation)
+
+## Performance Considerations
+
+<Note>
+**Interrupt Overhead:**
+- `TeclasJugador()`: approximately 100-200 cycles (tile map updates)
+- `HabilitarBotonesDialogo()`: less than 10 cycles (boolean assignment)
+- `ActualizarAnimacion()`: approximately 500-1000 cycles (updates 2-12 sprites)
+
+All interrupts complete well within the 1/60th second frame budget.
+</Note>

@@ -1,0 +1,324 @@
+---
+title: 'Game Loop Architecture'
+description: 'Main loop structure, state management, and frame synchronization in Una Aventura Inesperada'
+---
+
+## Overview
+
+The game loop in Una Aventura Inesperada follows a classic game architecture pattern: initialize hardware, set up game state, and enter the main loop that processes input, updates game logic, and synchronizes with the display's vertical blank.
+
+## Main Function Structure
+
+The `main()` function (main.c:157) serves as the entry point and primary game loop:
+
+```c
+int main(void)
+{
+    // Hardware initialization
+    REG_POWERCNT = POWER_ALL_2D;
+    
+    REG_DISPCNT_SUB = MODE_0_2D | DISPLAY_BG0_ACTIVE;
+    VRAM_C_CR = VRAM_ENABLE | VRAM_C_SUB_BG;
+    
+    // Framebuffer setup for menu
+    VRAM_A_CR = VRAM_ENABLE | VRAM_A_LCD;
+    VRAM_B_CR = VRAM_ENABLE | VRAM_B_LCD;
+    fb = VRAM_A;
+    
+    // Tile and map memory pointers
+    tileMemory = (u8*) BG_TILE_RAM_SUB(1);
+    mapMemory = (u16*) BG_MAP_RAM_SUB(0);
+    
+    // Initialize palette (26 colors)
+    BG_PALETTE_SUB[0] = RGB15(0, 0, 0);
+    BG_PALETTE_SUB[1] = RGB15(15, 4, 6);
+    // ... (palette continues)
+    
+    InicializarTeselas();
+    ConfigurarInterrupciones();
+    
+    tiempo = 0;
+    record = 1000;
+    
+    CrearMenu(menuTitulo, menuPrincipalBitmap, menuCreditosBitmap);
+    
+    // Main loop - handles level restart
+    u32 keys;
+    while(1) {
+        if(esActivoBotonReinicio == true) {
+            scanKeys();
+            keys = keysCurrent();
+            if(keys & KEY_TOUCH && esActivoBotonesDialogos == true) {
+                touchRead(&posicionXY);
+                if((posicionXY.px >= puntosReinicioNivelBoton[0].x && 
+                    posicionXY.px <= puntosReinicioNivelBoton[1].x) && 
+                   (posicionXY.py >= puntosReinicioNivelBoton[0].y && 
+                    posicionXY.py <= puntosReinicioNivelBoton[1].y)) {
+                    esJuegoReiniciado = true;
+                    ConsultarSistemaDialogo();
+                }
+            }
+            swiWaitForVBlank();
+        }
+    }
+}
+```
+
+## Game State Variables
+
+The game uses several boolean flags to manage state transitions (main.c:91-99):
+
+<ParamField path="esPartidaAcabada" type="bool" default="true">
+  Controls whether the game is in an active play state. Set to `false` during gameplay, `true` in menus.
+</ParamField>
+
+<ParamField path="jugadorVivo" type="bool" default="false">
+  Tracks whether the player character is active in the current level.
+</ParamField>
+
+<ParamField path="puedeJugadorMoverse" type="bool" default="true">
+  Prevents player movement when interacting with enemies or obstacles.
+</ParamField>
+
+<ParamField path="esActivoBotonReinicio" type="bool" default="false">
+  Enables the level restart button during gameplay.
+</ParamField>
+
+<ParamField path="esActivoBotonesDialogos" type="bool" default="true">
+  Prevents rapid dialog advancement through debouncing touch input.
+</ParamField>
+
+<ParamField path="esJuegoComenzado" type="bool" default="false">
+  Indicates whether the player has started the game from the main menu.
+</ParamField>
+
+<ParamField path="esFotograma1Activo" type="bool" default="true">
+  Toggles between animation frames (F1/F2) for sprites.
+</ParamField>
+
+## Update Cycle
+
+The game follows a standard **Input → Logic → Render** pattern:
+
+### 1. Input Processing
+
+Player input is handled through **IRQ_KEYS** interrupts (see [Interrupts](/reference/interrupts)). The `TeclasJugador()` callback (main.c:271) processes directional input:
+
+```c
+void TeclasJugador() {
+    // Check for UP movement
+    if (movimientosJugador > 0 && 
+        REG_KEYINPUT == 0x03BF && 
+        posJugFila > 0 && 
+        esPartidaAcabada == false && 
+        mapMemory[(posJugFila-1)*32+posJugColumna] != 18 && 
+        mapMemory[(posJugFila-1)*32+posJugColumna] != 28) {
+        
+        // Check for box collision
+        if(mapMemory[(posJugFila-2)*32+posJugColumna] == 19) {
+            MoverObstaculo(0);
+        }
+        // Check for enemy collision
+        else if(mapMemory[(posJugFila-2)*32+posJugColumna] == 5 || 
+                mapMemory[(posJugFila-2)*32+posJugColumna] == 42) {
+            int enemActual = -1;
+            for (int i=0; i<numeroDeEnemigos && enemActual == -1; i++) {
+                if(posJugFila-2 == posicionesEnemigo[i].y && 
+                   posJugColumna == posicionesEnemigo[i].x) {
+                    enemActual = i;
+                }
+            }
+            MoverEnemigo(0, enemActual);
+        }
+        
+        // Update player position if path is clear
+        if(mapMemory[(posJugFila-2)*32+posJugColumna] != 19 && 
+           mapMemory[(posJugFila-2)*32+posJugColumna] != 5 && 
+           puedeJugadorMoverse == true) {
+            // ... position update code
+        }
+        
+        movimientosJugador--;
+        ActualizarBarraMovimientos();
+    }
+}
+```
+
+<Note>
+The game uses a **2x2 tile grid** for all entities. Movement checks look 2 tiles ahead, and collision detection only examines diagonal corners.
+</Note>
+
+### 2. Game Logic
+
+Logic updates include:
+
+- **Movement validation** - Checking tile indices for walls (17, 18, 24, 26-28), boxes (19), and enemies (5, 42)
+- **Collision resolution** - Pushing boxes, eliminating enemies, or blocking player movement
+- **Stamina tracking** - Decrementing `movimientosJugador` and updating the HUD bar
+- **Win condition** - Reaching tile 23 triggers `ConsultarSistemaDialogo()` (main.c:476)
+
+### 3. Rendering
+
+Rendering is handled through:
+
+- **Tile map updates** - Modifying `mapMemory` to change displayed tiles
+- **Framebuffer drawing** - Direct pixel manipulation for the stamina bar (main.c:809-813)
+- **DMA transfers** - Loading full-screen images for menus/dialogs
+
+## Frame Synchronization
+
+The game synchronizes with the display using **vertical blank waiting**:
+
+```c
+swiWaitForVBlank();
+```
+
+This function appears in:
+- **Main loop** (main.c:232) - Prevents screen tearing during level restart checks
+- **Menu loop** (main.c:927) - Ensures smooth menu navigation
+- **Dialog loop** (main.c:962) - Synchronizes dialog rendering
+
+<Warning>
+All rendering loops call `swiWaitForVBlank()` to prevent screen tearing. The NDS refreshes at 60 Hz, so this effectively caps the game at 60 FPS.
+</Warning>
+
+## State Transitions
+
+### Menu → Gameplay
+
+Triggered by the "Start Game" button in `CrearMenu()` (main.c:906):
+
+```c
+if((posicionXY.px >= puntosComenzaPartidaBoton[0].x && 
+    posicionXY.px <= puntosComenzaPartidaBoton[1].x) && 
+   (posicionXY.py >= puntosComenzaPartidaBoton[0].y && 
+    posicionXY.py <= puntosComenzaPartidaBoton[1].y)) {
+    
+    // Play intro cinematics
+    CrearDialogo(CinematicaInicioF1Bitmap, 2);
+    CrearDialogo(CinematicaInicioF2Bitmap, 2);
+    CrearDialogo(CinematicaInicioF3Bitmap, 2);
+    
+    // Load level 1
+    mapaAcutal = nivel1;
+    GenerarNivel(nivel1, HUDBitmap, MOVIMIENTOS_NIV1);
+    esJuegoComenzado = true;
+}
+```
+
+### Gameplay → Dialog
+
+When the player reaches the exit (tile 23), `ConsultarSistemaDialogo()` is called (main.c:658). This function:
+
+1. Disables movement interrupts: `REG_KEYCNT = 0x3FFF;`
+2. Presents quiz questions via `CrearDialogo()`
+3. Advances to next level or restarts current level
+4. Re-enables movement: `REG_KEYCNT = 0x7FFF;` (in `GenerarNivel()`)
+
+### Level Progression
+
+The game tracks progress through `nivelActual` (0-4) and uses a switch statement (main.c:660) to handle each level's quiz:
+
+```c
+switch(nivelActual) {
+    case 0: // Level 1
+        if(esJuegoReiniciado == false && 
+           CrearDialogo(Pregunta1_1Bitmap, 1) && 
+           CrearDialogo(Pregunta1_2Bitmap, 0) && 
+           CrearDialogo(Pregunta1_3Bitmap, 0)) {
+            nivelActual++;
+            CrearDialogo(PreguntasAcertadasBitmap, 2);
+            mapaAcutal = nivel2;
+            GenerarNivel(nivel2, HUDBitmap, MOVIMIENTOS_NIV2);
+        } else {
+            if(esJuegoReiniciado == false) {
+                CrearDialogo(PreguntaFallidaBitmap, 2);
+            }
+            esJuegoReiniciado = false;
+            GenerarNivel(nivel1, HUDBitmap, MOVIMIENTOS_NIV1);
+        }
+        break;
+    // ... cases 1-4 for other levels
+}
+```
+
+## Level Generation
+
+The `GenerarNivel()` function (main.c:792) initializes a new level:
+
+```c
+void GenerarNivel(u16 mapa[], unsigned int imagen[], int numeroMovimientosMax) {
+    timerUnpause(1); // Resume animations
+    
+    REG_KEYCNT = 0x7FFF; // Enable input interrupts
+    esActivoBotonReinicio = true;
+    esPartidaAcabada = false;
+    jugadorVivo = true;
+    
+    // Load HUD to main screen
+    dmaCopy(imagen, VRAM_A, 256*192*2);
+    REG_DISPCNT = MODE_FB0;
+    
+    movimientosJugador = numeroMovimientosMax;
+    maximoMovimientosJugador = numeroMovimientosMax;
+    
+    // Draw stamina bar
+    for(int lin = COMIENZO_LINEA_BARRA_ESTAMINA; 
+        lin < ALTO_BARRA_ESTAMINA; lin++) {
+        for(int col = COMIENZO_COLUMNA_BARRA_ESTAMINA; 
+            col < ANCHO_BARRA_ESTAMINA; col++) {
+            fb[lin*256+col] = RGB15(0, 30, 0);
+        }
+    }
+    
+    // Load tile map and track entity positions
+    int fila, columna, contEnemigos = 0;
+    numeroDeEnemigos = 0;
+    pos_mapData = 0;
+    
+    for(fila = 0; fila < 24; fila++) {
+        for(columna = 0; columna < 32; columna++) {
+            pos_mapMemory = fila*32 + columna;
+            mapMemory[pos_mapMemory] = mapa[pos_mapData];
+            
+            // Track player position (tile 0)
+            if(mapMemory[pos_mapMemory] == 0) {
+                posJugColumna = columna;
+                posJugFila = fila;
+            }
+            // Track NPC position (tile 38)
+            else if(mapMemory[pos_mapMemory] == 38) {
+                posNpcColumna = columna;
+                posNpcFila = fila;
+            }
+            // Track enemy positions (tiles 5, 42)
+            else if(mapMemory[pos_mapMemory] == 5 || 
+                    mapMemory[pos_mapMemory] == 42) {
+                posicionesEnemigo[contEnemigos].x = columna;
+                posicionesEnemigo[contEnemigos].y = fila;
+                posicionesEnemigo[contEnemigos].vivo = true;
+                contEnemigos++;
+                numeroDeEnemigos++;
+            }
+            pos_mapData++;
+        }
+    }
+}
+```
+
+## Performance Considerations
+
+<Note>
+**Target Frame Rate:** 60 FPS (synchronized with VBlank)
+
+**Update Frequency:**
+- Player input: Interrupt-driven (instant response)
+- Animations: Timer-driven at ~0.5 Hz (TIMER_DATA = 32768, DIV_1024)
+- Stamina bar: Updated only on player movement
+</Note>
+
+The game minimizes per-frame work by:
+- Using interrupt-driven input instead of polling
+- Only updating tiles that change (no full screen refresh)
+- Leveraging hardware DMA for large transfers
+- Pausing animation timers during menus/dialogs

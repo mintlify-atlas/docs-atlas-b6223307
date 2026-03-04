@@ -1,0 +1,417 @@
+---
+title: Building the Game
+description: Build process and compilation instructions for Una Aventura Inesperada
+---
+
+## Build Process Overview
+
+Building Una Aventura Inesperada involves three main stages:
+
+1. **Asset Conversion**: Converting images to NDS format (.s/.h files)
+2. **Compilation**: Compiling C source to ARM machine code
+3. **Linking**: Creating the final .nds ROM file
+
+<Steps>
+  <Step title="Prepare Assets">
+    Graphics must be converted from standard formats (PNG, BMP) to NDS tile/bitmap data using `grit`.
+  </Step>
+
+  <Step title="Compile Source">
+    The ARM cross-compiler (`arm-none-eabi-gcc`) compiles C code to ARM9 object files.
+  </Step>
+
+  <Step title="Link ROM">
+    Object files are linked and packaged into an .nds ROM using `ndstool`.
+  </Step>
+</Steps>
+
+## Quick Start
+
+If you have a Makefile configured:
+
+```bash
+# Build the ROM
+make
+
+# Clean build artifacts
+make clean
+
+# Rebuild from scratch
+make clean && make
+```
+
+The output will be `una-aventura-inesperada.nds` in the project root.
+
+## Manual Build Process
+
+If building without a Makefile:
+
+### 1. Convert Graphics Assets
+
+The game uses pre-converted graphics in `.s` assembly format. If you need to reconvert:
+
+```bash
+# Convert main menu
+grit menuPrincipal.png -ftB -fh! -gTFF00FF -gt -gB8 -m! -omenuPrincipal
+
+# Convert HUD
+grit HUD.png -ftB -fh! -gTFF00FF -gt -gB8 -m! -oHUD
+
+# Convert cinematics
+grit CinematicaInicioF1.png -ftB -fh! -gTFF00FF -gt -gB8 -m! -oCinematicaInicioF1
+```
+
+<Note>
+The project already includes converted `.s` and `.h` files. You only need to run `grit` if modifying graphics.
+</Note>
+
+### 2. Compile Source Files
+
+```bash
+arm-none-eabi-gcc -c \
+  -mthumb -mthumb-interwork \
+  -march=armv5te -mtune=arm946e-s \
+  -DARM9 \
+  -I$DEVKITPRO/libnds/include \
+  -g -Wall -O2 \
+  -o build/main.o \
+  source/main.c
+```
+
+### 3. Assemble Graphics Data
+
+```bash
+# Assemble each .s file
+arm-none-eabi-as -mthumb -mthumb-interwork \
+  -o build/menuPrincipal.o \
+  source/menuPrincipal.s
+
+arm-none-eabi-as -mthumb -mthumb-interwork \
+  -o build/HUD.o \
+  source/HUD.s
+
+# Repeat for all .s files...
+```
+
+### 4. Link the Executable
+
+```bash
+arm-none-eabi-gcc \
+  -specs=ds_arm9.specs \
+  -mthumb -mthumb-interwork \
+  -march=armv5te \
+  -L$DEVKITPRO/libnds/lib \
+  -o una-aventura-inesperada.elf \
+  build/*.o \
+  -lnds9
+```
+
+### 5. Create the ROM
+
+```bash
+ndstool -c una-aventura-inesperada.nds \
+  -9 una-aventura-inesperada.elf \
+  -b icon.bmp "Una Aventura Inesperada;Puzzle Game;By Author"
+```
+
+## Compiler Flags Explained
+
+### Architecture Flags
+
+| Flag | Purpose |
+|------|--------|
+| `-mthumb` | Use 16-bit Thumb instruction set for smaller code |
+| `-mthumb-interwork` | Allow mixing ARM and Thumb code |
+| `-march=armv5te` | Target ARMv5TE architecture (NDS CPU) |
+| `-mtune=arm946e-s` | Optimize for ARM946E-S processor |
+
+### Compilation Flags
+
+| Flag | Purpose |
+|------|--------|
+| `-O2` | Optimization level 2 (balance speed/size) |
+| `-g` | Include debugging information |
+| `-Wall` | Enable all warnings |
+| `-DARM9` | Define ARM9 macro for conditional compilation |
+
+### Linker Flags
+
+| Flag | Purpose |
+|------|--------|
+| `-specs=ds_arm9.specs` | Use NDS ARM9 linker specifications |
+| `-lnds9` | Link against libnds library |
+
+## Asset Conversion Process
+
+### Image to Assembly
+
+The game stores graphics as assembly data files. Here's how the conversion works:
+
+<CodeGroup>
+```bash PNG to Assembly
+# Convert a 256x192 bitmap
+grit menuPrincipal.png \
+  -ftB          # Output bitmap format
+  -fh!          # Don't create header (manual)
+  -gTFF00FF     # Transparency color
+  -gt           # Generate for tiles
+  -gB8          # 8-bit depth
+  -m!           # No map output
+  -omenuPrincipal
+```
+
+```bash Output Files
+# Generates two files:
+menuPrincipal.s    # Assembly bitmap data
+menuPrincipal.h    # C header with extern declarations
+```
+</CodeGroup>
+
+### Header File Format
+
+Generated headers follow this pattern (`~/workspace/source/source/menuPrincipal.h`):
+
+```c
+// menuPrincipal.h
+extern const unsigned int menuPrincipalBitmapLen;
+extern const unsigned int menuPrincipalBitmap[];
+```
+
+### Assembly Data Format  
+
+The `.s` files contain raw bitmap data:
+
+```asm
+.section .rodata
+.align 4
+.global menuPrincipalBitmap
+menuPrincipalBitmap:
+    .word 0x12345678
+    .word 0x9ABCDEF0
+    # ... bitmap data
+```
+
+## Tile System Compilation
+
+The tile system (`teselas.h`) is compiled directly as C arrays (`~/workspace/source/source/teselas.h:1`):
+
+```c
+// Tile data is embedded in header
+u8 t_jugadorF1Parte1[64] = {
+    12, 12, 12, 1, 1, 1, 1, 1,
+    12, 12, 12, 1, 1, 5, 5, 4,
+    // ... 8x8 tile data
+};
+```
+
+These are loaded at runtime via DMA (`~/workspace/source/source/main.c:1067`):
+
+```c
+dmaCopy(t_jugadorF1Parte1, tileMemory, sizeof(t_jugadorF1Parte1));
+```
+
+## Build Output Files
+
+### Intermediate Files
+
+```
+build/
+├── main.o              # Compiled main.c
+├── menuPrincipal.o     # Assembled menu graphics
+├── HUD.o               # Assembled HUD graphics  
+├── CinematicaInicioF1.o
+├── Pregunta1-1.o
+└── ...                 # All other .s files
+```
+
+### Final Output
+
+```
+una-aventura-inesperada.nds    # Nintendo DS ROM (playable)
+una-aventura-inesperada.elf    # ELF binary (for debugging)
+una-aventura-inesperada.map    # Memory map (optional)
+```
+
+<Note>
+The `.nds` file is the only file needed to play the game on hardware or emulators.
+</Note>
+
+## Memory Map
+
+The linker uses NDS-specific memory regions:
+
+| Region | Address Range | Purpose |
+|--------|---------------|--------|
+| ARM9 RAM | 0x02000000 - 0x023FFFFF | Main program memory (4MB) |
+| VRAM | 0x06000000 - 0x06FFFFFF | Video memory (656KB) |
+| Tile RAM | BG_TILE_RAM_SUB(1) | Background tiles |
+| Map RAM | BG_MAP_RAM_SUB(0) | Tile map data |
+
+## Build Optimization
+
+### Size Optimization
+
+To reduce ROM size:
+
+```makefile
+CFLAGS += -Os          # Optimize for size
+CFLAGS += -ffunction-sections -fdata-sections
+LDFLAGS += -Wl,--gc-sections  # Remove unused sections
+```
+
+### Speed Optimization  
+
+For better performance:
+
+```makefile
+CFLAGS += -O3          # Maximum optimization
+CFLAGS += -ffast-math  # Fast floating point
+CFLAGS += -funroll-loops
+```
+
+<Note>
+The game currently uses `-O2` as a balance between size and speed.
+</Note>
+
+## Build Troubleshooting
+
+### Common Issues
+
+<Steps>
+  <Step title="Missing libnds">
+    **Error**: `fatal error: nds.h: No such file or directory`
+    
+    **Solution**: Install nds-dev package:
+    ```bash
+    sudo dkp-pacman -S nds-dev
+    ```
+  </Step>
+
+  <Step title="Undefined References">
+    **Error**: `undefined reference to 'dmaCopy'`
+    
+    **Solution**: Link against libnds:
+    ```bash
+    -lnds9
+    ```
+  </Step>
+
+  <Step title="Wrong Architecture">
+    **Error**: `bad instruction` or `illegal instruction`
+    
+    **Solution**: Verify ARM flags:
+    ```bash
+    -march=armv5te -mthumb -mthumb-interwork
+    ```
+  </Step>
+
+  <Step title="Missing DEVKITARM">
+    **Error**: `arm-none-eabi-gcc: command not found`
+    
+    **Solution**: Set environment variables:
+    ```bash
+    export DEVKITPRO=/opt/devkitpro
+    export DEVKITARM=$DEVKITPRO/devkitARM
+    export PATH=$DEVKITARM/bin:$PATH
+    ```
+  </Step>
+</Steps>
+
+### Debugging Build Issues
+
+Enable verbose output:
+
+```bash
+make VERBOSE=1
+```
+
+Or add to Makefile:
+```makefile
+V := 1
+```
+
+## Testing the Build
+
+### Using an Emulator
+
+<CodeGroup>
+```bash DeSmuME
+# Run in DeSmuME emulator
+desmume una-aventura-inesperada.nds
+```
+
+```bash NO$GBA
+# Run in NO$GBA (Windows)
+no$gba una-aventura-inesperada.nds
+```
+</CodeGroup>
+
+### On Hardware
+
+1. Copy the `.nds` file to your flashcard
+2. Insert flashcard into Nintendo DS
+3. Launch from the DS menu
+
+## Continuous Integration
+
+Example GitHub Actions workflow:
+
+```yaml .github/workflows/build.yml
+name: Build NDS ROM
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Build ROM
+      run: |
+        make
+    
+    - name: Upload ROM
+      uses: actions/upload-artifact@v2
+      with:
+        name: una-aventura-inesperada.nds
+        path: una-aventura-inesperada.nds
+```
+
+## Advanced Build Topics
+
+### Custom Linker Scripts
+
+For advanced memory management, create a custom linker script:
+
+```ld
+/* custom.ld */
+OUTPUT_FORMAT("elf32-littlearm")
+OUTPUT_ARCH(arm)
+ENTRY(_start)
+
+MEMORY {
+    rom : ORIGIN = 0x08000000, LENGTH = 32M
+    ewram : ORIGIN = 0x02000000, LENGTH = 4M
+}
+
+SECTIONS {
+    .text : { *(.text) } > rom
+    .data : { *(.data) } > ewram
+    .bss : { *(.bss) } > ewram
+}
+```
+
+### Parallel Builds
+
+Speed up compilation with parallel jobs:
+
+```bash
+make -j$(nproc)  # Use all CPU cores
+```
+
+<Note>
+Parallel builds can significantly reduce compilation time on multi-core systems.
+</Note>

@@ -1,0 +1,464 @@
+---
+title: Assets & Graphics
+description: Asset pipeline and graphics system for Una Aventura Inesperada
+---
+
+## Asset Overview
+
+Una Aventura Inesperada uses two types of graphics assets:
+
+1. **Tile-based sprites** - 8x8 pixel tiles for game objects
+2. **Full-screen bitmaps** - 256x192 pixel images for menus/cinematics
+
+## Asset File Types
+
+### Header Files (.h)
+
+Header files declare external bitmap arrays (`~/workspace/source/source/HUD.h`):
+
+```c
+extern const unsigned int HUDBitmapLen;
+extern const unsigned int HUDBitmap[36864];
+```
+
+**Purpose**: Allows C code to reference bitmap data compiled from `.s` files
+
+### Assembly Files (.s)
+
+Assembly files contain the actual bitmap data in ARM assembly format:
+
+```asm
+.section .rodata
+.align 4
+.global HUDBitmap
+HUDBitmap:
+    .word 0x12345678
+    .word 0x9ABCDEF0
+    # ... 36864 words of pixel data
+```
+
+**Size**: 256×192 pixels × 2 bytes = 98,304 bytes (36,864 words)
+
+## Tile System
+
+### Tile Definition
+
+Tiles are stored as 8×8 pixel arrays in `teselas.h` (`~/workspace/source/source/teselas.h:1`):
+
+```c
+u8 t_jugadorF1Parte1[64] = {
+    12, 12, 12, 1, 1, 1, 1, 1,  // Row 0
+    12, 12, 12, 1, 1, 5, 5, 4,  // Row 1  
+    12, 12, 12, 1, 5, 2, 2, 2,  // Row 2
+    12, 12, 12, 1, 5, 4, 3, 3,  // Row 3
+    12, 12, 12, 1, 1, 4, 3, 3,  // Row 4
+    12, 12, 12, 1, 1, 4, 5, 5,  // Row 5
+    12, 12, 1, 1, 1, 1, 2, 1,   // Row 6
+    12, 12, 12, 12, 1, 2, 1, 2, // Row 7
+};
+```
+
+**Format**: 
+- Each value is a palette index (0-26)
+- 64 bytes per 8×8 tile
+- Indexed color (256 color palette)
+
+### Tile Memory Layout
+
+Tiles are loaded into VRAM sequentially (`~/workspace/source/source/main.c:1067`):
+
+<Steps>
+  <Step title="Player Sprites">
+    ```c
+    dmaCopy(t_jugadorF1Parte1, tileMemory, sizeof(t_jugadorF1Parte1));        // Index 0
+    dmaCopy(t_jugadorF1Parte2, tileMemory+(64*8), sizeof(t_jugadorF1Parte2)); // Index 8
+    dmaCopy(t_jugadorF1Parte3, tileMemory+(64*9), sizeof(t_jugadorF1Parte3)); // Index 9
+    dmaCopy(t_jugadorF1Parte4, tileMemory+(64*10), sizeof(t_jugadorF1Parte4));// Index 10
+    ```
+    
+    Player sprite uses 4 tiles arranged in 2×2 grid (16×16 pixels)
+  </Step>
+
+  <Step title="Enemy Sprites">
+    ```c
+    dmaCopy(t_enemigoF1Parte1, tileMemory+(64*5), sizeof(t_enemigoF1Parte1)); // Index 5
+    dmaCopy(t_enemigoF1Parte2, tileMemory+(64*14), sizeof(t_enemigoF1Parte2));// Index 14
+    dmaCopy(t_enemigoF1Parte3, tileMemory+(64*15), sizeof(t_enemigoF1Parte3));// Index 15
+    dmaCopy(t_enemigoF1Parte4, tileMemory+(64*16), sizeof(t_enemigoF1Parte4));// Index 16
+    ```
+    
+    Enemy uses indices 5, 14, 15, 16 (Frame 1) and 42, 43, 44, 45 (Frame 2)
+  </Step>
+
+  <Step title="Environment Tiles">
+    ```c
+    dmaCopy(t_salida, tileMemory+(64*1), sizeof(t_salida));   // Index 1 - Floor
+    dmaCopy(t_meta, tileMemory+(64*2), sizeof(t_meta));       // Index 2 - Checkered
+    dmaCopy(t_hierba, tileMemory+(64*3), sizeof(t_hierba));   // Index 3 - Grass
+    dmaCopy(t_vacio, tileMemory+(64*18), sizeof(t_vacio));    // Index 18 - Empty/black
+    ```
+  </Step>
+</Steps>
+
+<Note>
+Tile index = (memory offset) / 64. For example, `tileMemory+(64*8)` = index 8.
+</Note>
+
+## Sprite Definitions
+
+The game uses composite sprites built from multiple tiles:
+
+### Player Sprite (16×16 pixels)
+
+<CodeGroup>
+```c Frame 1 (Indices 0, 8, 9, 10)
+// Top-left    Top-right
+//   [0]          [8]
+//   [9]         [10]
+// Bottom-left  Bottom-right
+
+mapMemory[pos] = 0;   // t_jugadorF1Parte1
+mapMemory[pos+1] = 8; // t_jugadorF1Parte2  
+mapMemory[pos+32] = 9;   // t_jugadorF1Parte3
+mapMemory[pos+33] = 10;  // t_jugadorF1Parte4
+```
+
+```c Frame 2 (Indices 34, 35, 36, 37)
+// Animation frame 2
+mapMemory[pos] = 34;   // t_jugadorF2Parte1
+mapMemory[pos+1] = 35; // t_jugadorF2Parte2
+mapMemory[pos+32] = 36; // t_jugadorF2Parte3  
+mapMemory[pos+33] = 37; // t_jugadorF2Parte4
+```
+</CodeGroup>
+
+### Enemy Sprite (16×16 pixels)
+
+```c
+// Frame 1: Indices 5, 14, 15, 16
+t_enemigoF1Parte1[64]  // Top-left (Index 5)
+t_enemigoF1Parte2[64]  // Top-right (Index 14)  
+t_enemigoF1Parte3[64]  // Bottom-left (Index 15)
+t_enemigoF1Parte4[64]  // Bottom-right (Index 16)
+
+// Frame 2: Indices 42, 43, 44, 45 (animation)
+t_enemigoF2Parte1[64]  // Top-left (Index 42)
+t_enemigoF2Parte2[64]  // Top-right (Index 43)
+t_enemigoF2Parte3[64]  // Bottom-left (Index 44)
+t_enemigoF2Parte4[64]  // Bottom-right (Index 45)
+```
+
+### NPC Sprite (16×16 pixels)
+
+```c  
+// Frame 1: Indices 30, 31, 32, 33
+t_npcParte1[64]   // Top-left
+t_npcParte2[64]   // Top-right
+t_npcParte3[64]   // Bottom-left
+t_npcParte4[64]   // Bottom-right
+
+// Frame 2: Indices 38, 39, 40, 41
+t_npcF2Parte1[64] // Animated frame
+```
+
+### Box Sprite (16×16 pixels)
+
+```c
+// Indices 19, 20, 21, 22 (stationary)
+t_cajaParte1[64]  // Top-left
+t_cajaParte2[64]  // Top-right
+t_cajaParte3[64]  // Bottom-left
+t_cajaParte4[64]  // Bottom-right
+```
+
+### Wall Tiles
+
+<CodeGroup>
+```c Horizontal Walls
+t_muroParte1[64]  // Index 26 - Top section
+t_muroParte2[64]  // Index 27 - Pattern 1
+t_muroParte3[64]  // Index 28 - Bottom section  
+t_muroParte4[64]  // Index 29 - Pattern 2
+```
+
+```c Vertical Walls  
+t_muroIzqParte1[64]  // Index 7 - Left wall top
+t_muroIzqParte2[64]  // Index 17 - Left wall bottom
+t_muroDerParte1[64]  // Index 24 - Right wall top
+t_muroDerParte2[64]  // Index 25 - Right wall bottom
+```
+</CodeGroup>
+
+## Palette System
+
+The game uses a 27-color palette defined at startup (`~/workspace/source/source/main.c:175`):
+
+```c
+BG_PALETTE_SUB[0] = RGB15(0, 0, 0);      // Black
+BG_PALETTE_SUB[1] = RGB15(15, 4, 6);     // Pink/Red
+BG_PALETTE_SUB[2] = RGB15(18, 8, 5);     // Brown  
+BG_PALETTE_SUB[3] = RGB15(9, 20, 9);     // Green (grass)
+BG_PALETTE_SUB[4] = RGB15(31, 25, 20);   // Light tan
+BG_PALETTE_SUB[5] = RGB15(28, 23, 18);   // Tan
+BG_PALETTE_SUB[6] = RGB15(12, 6, 11);    // Purple
+BG_PALETTE_SUB[7] = RGB15(20, 5, 10);    // Dark red
+BG_PALETTE_SUB[8] = RGB15(6, 8, 10);     // Dark blue
+BG_PALETTE_SUB[9] = RGB15(31, 25, 8);    // Yellow
+BG_PALETTE_SUB[10] = RGB15(11, 17, 21);  // Blue
+BG_PALETTE_SUB[11] = RGB15(9, 14, 17);   // Dark blue-gray
+BG_PALETTE_SUB[12] = RGB15(8, 5, 7);     // Dark purple (transparent)
+BG_PALETTE_SUB[13] = RGB15(5, 5, 10);    // Navy
+BG_PALETTE_SUB[14] = RGB15(9, 8, 13);    // Purple-gray
+BG_PALETTE_SUB[15] = RGB15(15, 6, 6);    // Red
+BG_PALETTE_SUB[16] = RGB15(11, 5, 6);    // Dark red
+BG_PALETTE_SUB[17] = RGB15(18, 17, 16);  // Light gray
+BG_PALETTE_SUB[18] = RGB15(7, 5, 4);     // Brown-gray
+BG_PALETTE_SUB[19] = RGB15(15, 11, 7);   // Tan
+BG_PALETTE_SUB[20] = RGB15(11, 8, 5);    // Brown
+BG_PALETTE_SUB[21] = RGB15(18, 13, 9);   // Light brown
+BG_PALETTE_SUB[22] = RGB15(13, 9, 5);    // Medium brown
+BG_PALETTE_SUB[23] = RGB15(15, 13, 12);  // Off-white
+BG_PALETTE_SUB[24] = RGB15(3, 2, 3);     // Very dark
+BG_PALETTE_SUB[25] = RGB15(10, 7, 8);    // Gray
+BG_PALETTE_SUB[26] = RGB15(31, 31, 31);  // White
+```
+
+### RGB15 Format
+
+Nintendo DS uses 15-bit color (RGB555):
+
+```c
+#define RGB15(r,g,b) ((r)|((g)<<5)|((b)<<10))
+```
+
+- **Red**: 5 bits (0-31)
+- **Green**: 5 bits (0-31)  
+- **Blue**: 5 bits (0-31)
+- **Total**: 32,768 possible colors
+
+<Note>
+Color index 12 (dark purple) is used as the transparent color for sprites.
+</Note>
+
+## Image Assets
+
+The game includes these full-screen (256×192) bitmap assets:
+
+### Menu Assets
+
+| File | Purpose | Usage |
+|------|---------|-------|
+| `menuPrincipal.h/.s` | Main menu screen | Title screen with "Start" and "Credits" buttons |
+| `menuCreditos.h/.s` | Credits screen | Developer information |
+| `HUD.h/.s` | In-game HUD | Stamina bar and game UI |
+
+### Cinematic Assets
+
+<CodeGroup>
+```c Opening Cinematics
+CinematicaInicioF1.h/.s  // Opening frame 1
+CinematicaInicioF2.h/.s  // Opening frame 2  
+CinematicaInicioF3.h/.s  // Opening frame 3
+```
+
+```c Ending Cinematics
+CinematicaFinalF1.h/.s   // Ending frame 1
+CinematicaFinalF2.h/.s   // Ending frame 2
+CinematicaFinalF3.h/.s   // Ending frame 3
+```
+</CodeGroup>
+
+### Question Assets
+
+```c
+Pregunta1-1.h/.s  // Level 1, Question 1
+Pregunta1-2.h/.s  // Level 1, Question 2
+Pregunta1-3.h/.s  // Level 1, Question 3
+Pregunta2-1.h/.s  // Level 2, Question 1  
+Pregunta2-2.h/.s  // Level 2, Question 2
+Pregunta3-1.h/.s  // Level 3, Question 1
+Pregunta3-2.h/.s  // Level 3, Question 2
+Pregunta4.h/.s    // Level 4, Question
+Pregunta5-1.h/.s  // Level 5, Question 1
+Pregunta5-2.h/.s  // Level 5, Question 2
+PreguntaFallida.h/.s        // Wrong answer screen
+PreguntasAcertadas.h/.s     // Correct answer screen
+PreguntasAcertadasFinal.h/.s // Final victory screen
+```
+
+## Asset Pipeline
+
+### Source to Game Flow
+
+<Steps>
+  <Step title="Create Source Image">
+    Design graphics in any image editor:
+    - **Format**: PNG or BMP
+    - **Size**: 256×192 for fullscreen, 8×8/16×16 for tiles
+    - **Colors**: Use palette-friendly colors (limit to ~27 colors)
+  </Step>
+
+  <Step title="Convert with grit">
+    Convert image to NDS format:
+    
+    ```bash
+    grit image.png -ftB -fh! -gTFF00FF -gt -gB8 -m! -oimage
+    ```
+    
+    Generates:
+    - `image.s` - Assembly bitmap data
+    - `image.h` - C header declarations
+  </Step>
+
+  <Step title="Include in Source">
+    Add to `main.c`:
+    
+    ```c
+    #include "image.h"
+    ```
+  </Step>
+
+  <Step title="Load at Runtime">
+    Copy bitmap to VRAM:
+    
+    ```c
+    dmaCopy(imageBitmap, VRAM_A, 256*192*2);
+    REG_DISPCNT = MODE_FB0;
+    ```
+  </Step>
+</Steps>
+
+### Tile Creation Workflow
+
+1. **Design 8×8 tiles** in a pixel art editor
+2. **Extract palette indices** (0-26) for each pixel  
+3. **Create C array** in `teselas.h`:
+   ```c
+   u8 t_myTile[64] = {
+       12, 12, 12, 1, 1, 1, 1, 1,
+       // ... 8 rows of 8 values
+   };
+   ```
+4. **Load into VRAM** with `dmaCopy()` in `InicializarTeselas()`
+5. **Reference by index** in map arrays
+
+## Memory Usage
+
+### Tile Memory
+
+The game loads approximately 94 tiles into VRAM:
+
+```
+Tile Memory Usage:
+94 tiles × 64 bytes = 6,016 bytes (~6 KB)
+```
+
+**VRAM Allocation**:
+```c
+tileMemory = (u8*) BG_TILE_RAM_SUB(1);  // Base 1 in sub screen
+```
+
+### Bitmap Memory
+
+Each fullscreen bitmap:
+
+```
+256 × 192 pixels × 2 bytes = 98,304 bytes (~96 KB)
+```
+
+**Total assets**: ~20 bitmaps × 96 KB = ~1.9 MB
+
+### Map Memory
+
+Each level map:
+
+```  
+32 × 24 tiles × 2 bytes = 1,536 bytes (~1.5 KB)
+```
+
+**Total levels**: 5 levels + menu × 1.5 KB = ~9 KB
+
+<Note>
+The Nintendo DS has 656 KB of VRAM and 4 MB of main RAM, providing ample space for game assets.
+</Note>
+
+## Animation System
+
+Sprites alternate between two frames (`~/workspace/source/source/main.c:981`):
+
+```c
+void ActualizarAnimacion() {
+    if(esFotograma1Activo == true) {
+        // Frame 1: NPC uses indices 38, 39, 40, 41
+        mapMemory[posNpcFila*32+posNpcColumna] = 38;
+        mapMemory[posNpcFila*32+(posNpcColumna+1)] = 39;
+        mapMemory[(posNpcFila+1)*32+posNpcColumna] = 40;
+        mapMemory[(posNpcFila+1)*32+(posNpcColumna+1)] = 41;
+        
+        // Frame 1: Enemy uses indices 5, 14, 15, 16
+        for(int i=0; i<numeroDeEnemigos; i++) {
+            if(posicionesEnemigo[i].vivo == true) {
+                mapMemory[(posicionesEnemigo[i].y)*32+(posicionesEnemigo[i].x)] = 5;
+                // ... set other enemy tiles
+            }
+        }
+        esFotograma1Activo = false;
+    } else {
+        // Frame 2: NPC uses indices 30, 31, 32, 33
+        // Frame 2: Enemy uses indices 42, 43, 44, 45
+        esFotograma1Activo = true;
+    }
+}
+```
+
+**Animation Timer**: Configured in `ConfigurarInterrupciones()` (`main.c:256`)
+
+```c
+irqEnable(IRQ_TIMER1);
+irqSet(IRQ_TIMER1, ActualizarAnimacion);
+TIMER_DATA(1) = 32768;
+TIMER_CR(1) = TIMER_DIV_1024 | TIMER_ENABLE | TIMER_IRQ_REQ;
+```
+
+## Creating New Assets
+
+### Adding a New Tile
+
+1. Design your 8×8 tile
+2. Add to `teselas.h`:
+   ```c
+   u8 t_newTile[64] = {
+       // 64 palette indices
+   };
+   ```
+3. Load in `InicializarTeselas()`:
+   ```c
+   dmaCopy(t_newTile, tileMemory+(64*95), sizeof(t_newTile)); // Index 95
+   ```
+4. Use in map arrays:
+   ```c
+   nivel1[768] = {
+       95, 95, // Your new tile
+   };
+   ```
+
+### Adding a New Bitmap
+
+1. Create 256×192 PNG image
+2. Convert with grit:
+   ```bash
+   grit newImage.png -ftB -fh! -gTFF00FF -gt -gB8 -m! -onewImage
+   ```
+3. Add to `main.c`:
+   ```c
+   #include "newImage.h"
+   ```
+4. Display:
+   ```c
+   dmaCopy(newImageBitmap, VRAM_A, 256*192*2);
+   REG_DISPCNT = MODE_FB0;
+   ```
+
+<Note>
+Remember to add both the `.h` and `.s` files to your build system.
+</Note>

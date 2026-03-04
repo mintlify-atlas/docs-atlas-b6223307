@@ -1,80 +1,616 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Build and run Una Aventura Inesperada on your Nintendo DS or emulator"
 ---
 
-## Get started in three steps
+# Quickstart Guide
 
-Get your documentation site running locally and make your first customization.
+This guide will help you set up the development environment, build Una Aventura Inesperada from source, and run it on an emulator or real Nintendo DS hardware.
 
-### Step 1: Set up your local environment
+## Prerequisites
+
+Before you begin, ensure you have the following:
+
+<Steps>
+  <Step title="DevkitPro ARM Toolchain">
+    The DevkitPro ARM toolchain is required to compile Nintendo DS homebrew applications.
+    
+    **Supported Platforms**:
+    - Windows (via MSYS2)
+    - macOS (via Homebrew or pacman)
+    - Linux (via pacman)
+    
+    <Note>
+      DevkitPro provides pre-built packages for all major operating systems. Visit [devkitpro.org](https://devkitpro.org/wiki/Getting_Started) for platform-specific installation instructions.
+    </Note>
+  </Step>
+  
+  <Step title="System Requirements">
+    - **Disk Space**: ~500 MB for DevkitPro + toolchain
+    - **RAM**: 2 GB minimum
+    - **OS**: Windows 7+, macOS 10.13+, or Linux (kernel 3.2+)
+  </Step>
+  
+  <Step title="Optional: NDS Emulator">
+    For testing without hardware:
+    - **DeSmuME**: Recommended for accuracy
+    - **melonDS**: Modern alternative with improved features
+    - **NO$GBA**: Lightweight debugger option
+  </Step>
+  
+  <Step title="Optional: Flash Cart (for Real Hardware)">
+    To run on actual Nintendo DS hardware:
+    - R4 card
+    - Acekard 2i
+    - DSTWO
+    - Any compatible flashcart with microSD support
+  </Step>
+</Steps>
+
+## Installation
+
+### Installing DevkitPro ARM
+
+Follow the instructions for your operating system:
+
+<CodeGroup>
+```bash title="Windows (MSYS2)"
+# Download and run the DevkitPro installer from:
+# https://github.com/devkitPro/installer/releases
+
+# After installation, open MSYS2 and install devkitARM:
+pacman -S nds-dev
+
+# Verify installation:
+which arm-none-eabi-gcc
+# Should output: /opt/devkitpro/devkitARM/bin/arm-none-eabi-gcc
+```
+
+```bash title="macOS (Homebrew)"
+# Install DevkitPro pacman
+brew install devkitpro/devkitpro/devkitpro-pacman
+
+# Install NDS development tools
+sudo dkp-pacman -S nds-dev
+
+# Add to PATH (add to ~/.zshrc or ~/.bash_profile)
+export DEVKITPRO=/opt/devkitpro
+export DEVKITARM=$DEVKITPRO/devkitARM
+export PATH=$DEVKITARM/bin:$PATH
+
+# Reload shell configuration
+source ~/.zshrc  # or source ~/.bash_profile
+```
+
+```bash title="Linux (Debian/Ubuntu)"
+# Download and install DevkitPro pacman
+wget https://github.com/devkitPro/pacman/releases/latest/download/devkitpro-pacman.amd64.deb
+sudo dpkg -i devkitpro-pacman.amd64.deb
+
+# Install NDS development tools
+sudo dkp-pacman -S nds-dev
+
+# Add to PATH (add to ~/.bashrc)
+export DEVKITPRO=/opt/devkitpro
+export DEVKITARM=$DEVKITPRO/devkitARM
+export PATH=$DEVKITARM/bin:$PATH
+
+# Reload shell configuration
+source ~/.bashrc
+```
+
+```bash title="Linux (Arch)"
+# DevkitPro is available in AUR
+yay -S devkitpro-pacman
+
+# Install NDS development tools
+sudo dkp-pacman -S nds-dev
+
+# Environment variables should be set automatically
+```
+</CodeGroup>
+
+### Verify Installation
+
+Confirm DevkitPro ARM is correctly installed:
+
+```bash
+# Check compiler version
+arm-none-eabi-gcc --version
+
+# Verify environment variables
+echo $DEVKITPRO
+echo $DEVKITARM
+
+# Check for libnds
+ls $DEVKITPRO/libnds
+```
+
+Expected output:
+```
+arm-none-eabi-gcc (devkitARM release XX) X.X.X
+/opt/devkitpro
+/opt/devkitpro/devkitARM
+include/  lib/
+```
+
+## Building the Game
+
+<Steps>
+  <Step title="Clone or Download Source Code">
+    Obtain the Una Aventura Inesperada source code:
+    
+    ```bash
+    # If using git
+    git clone <repository-url>
+    cd una-aventura-inesperada
+    
+    # Or extract from archive
+    unzip una-aventura-inesperada.zip
+    cd una-aventura-inesperada
+    ```
+  </Step>
+  
+  <Step title="Navigate to Source Directory">
+    ```bash
+    cd source
+    ls
+    ```
+    
+    You should see:
+    - `main.c` - Main game logic
+    - `teselas.h` - Tile and level definitions
+    - Various `.h` files for graphics assets
+    - `Makefile` (if present)
+  </Step>
+  
+  <Step title="Compile the Game">
+    If a Makefile exists:
+    
+    ```bash
+    make clean
+    make
+    ```
+    
+    If no Makefile is present, compile manually:
+    
+    ```bash
+    # Compile the source
+    arm-none-eabi-gcc \
+      -g -Wall -O2 \
+      -march=armv5te -mtune=arm946e-s \
+      -fomit-frame-pointer -ffast-math \
+      -mthumb -mthumb-interwork \
+      -I$DEVKITPRO/libnds/include \
+      -DARM9 \
+      -c main.c -o main.o
+    
+    # Link the executable
+    arm-none-eabi-gcc \
+      -g -mthumb -mthumb-interwork \
+      -specs=ds_arm9.specs \
+      main.o \
+      -L$DEVKITPRO/libnds/lib \
+      -lnds9 \
+      -o una-aventura-inesperada.elf
+    
+    # Convert to NDS ROM
+    ndstool -c una-aventura-inesperada.nds \
+      -9 una-aventura-inesperada.elf \
+      -b $DEVKITPRO/libnds/icon.bmp \
+      "Una Aventura Inesperada;by Juan Jose Gomez Simon;Puzzle Game"
+    ```
+    
+    <Note>
+      The build process should complete without errors. If you encounter issues, verify that all environment variables are set correctly.
+    </Note>
+  </Step>
+  
+  <Step title="Verify Build Output">
+    Check that the ROM file was created:
+    
+    ```bash
+    ls -lh *.nds
+    ```
+    
+    Expected output:
+    ```
+    -rw-r--r-- 1 user user 256K una-aventura-inesperada.nds
+    ```
+  </Step>
+</Steps>
+
+## Running on Emulator
+
+Test your build using an NDS emulator:
+
+<Tabs>
+  <Tab title="DeSmuME">
+    ### DeSmuME (Recommended)
+    
+    **Installation**:
+    ```bash
+    # Windows: Download from https://desmume.org/download/
+    # macOS:
+    brew install --cask desmume
+    # Linux:
+    sudo apt install desmume  # Debian/Ubuntu
+    ```
+    
+    **Running the Game**:
+    ```bash
+    # Command line
+    desmume una-aventura-inesperada.nds
+    
+    # Or use File > Open ROM in the GUI
+    ```
+    
+    **Controls**:
+    - **Arrow Keys**: D-Pad movement
+    - **Z/X/A/S**: A/B/X/Y buttons
+    - **Q/W**: L/R triggers
+    - **Mouse**: Touchscreen (click and drag)
+    - **Enter**: Start button
+  </Tab>
+  
+  <Tab title="melonDS">
+    ### melonDS
+    
+    **Installation**:
+    ```bash
+    # Download from https://melonds.kuribo64.net/downloads.php
+    
+    # Linux:
+    sudo apt install melonds
+    ```
+    
+    **First Time Setup**:
+    1. Launch melonDS
+    2. Go to Config > Emu settings
+    3. Set up BIOS files (optional for homebrew)
+    
+    **Running the Game**:
+    ```bash
+    melonDS una-aventura-inesperada.nds
+    ```
+    
+    **Touchscreen**: Click on the bottom screen to interact with menus and dialogs
+  </Tab>
+  
+  <Tab title="NO$GBA">
+    ### NO$GBA (Debugger)
+    
+    **Installation**:
+    - Download from https://problemkaputt.de/gba.htm
+    - Windows only
+    
+    **Running the Game**:
+    ```bash
+    NO$GBA.exe una-aventura-inesperada.nds
+    ```
+    
+    **Debug Features**:
+    - Real-time memory viewer
+    - CPU register inspection
+    - Breakpoint support
+  </Tab>
+</Tabs>
+
+<Warning>
+  Some emulators may have compatibility issues with touchscreen input or timer-based animations. DeSmuME and melonDS are recommended for the best experience.
+</Warning>
+
+## Running on Real Hardware
+
+<Steps>
+  <Step title="Prepare Flash Cartridge">
+    1. Insert a microSD card into your computer
+    2. Format as FAT32 if needed
+    3. Copy `una-aventura-inesperada.nds` to the root or games folder
+  </Step>
+  
+  <Step title="Install on Nintendo DS">
+    1. Safely eject the microSD from your computer
+    2. Insert microSD into your flash cartridge
+    3. Insert flash cartridge into Nintendo DS
+    4. Power on the DS
+  </Step>
+  
+  <Step title="Launch the Game">
+    1. Navigate to your flash cart's menu
+    2. Select "una-aventura-inesperada.nds"
+    3. Press A to launch
+    
+    <Note>
+      The game should boot immediately and display the title screen on the top display.
+    </Note>
+  </Step>
+</Steps>
+
+## First Playthrough Tips
+
+### Understanding the Controls
+
+**D-Pad Movement**:
+- The player character moves in 2×2 tile blocks
+- Each direction moves exactly 2 tiles
+- Movement is grid-locked (no diagonal movement)
+
+```c title="Movement System"
+// Each movement consumes 1 stamina point
+// Grid movement is in 2-tile increments
+if (movimientosJ ugador > 0 && posJugFila > 0) {
+    posJugFila -= 2;  // Move up by 2 tiles
+    movimientosJugador--;  // Consume stamina
+    ActualizarBarraMovimientos();
+}
+```
+
+**Touchscreen Controls**:
+- Tap menu buttons to navigate
+- Select quiz answers by tapping on the bottom screen
+- Use the restart button if you get stuck
+
+### Game Mechanics
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+  <Accordion title="Box Pushing">
+    - Push boxes by walking into them
+    - Boxes move 2 tiles in the push direction
+    - Boxes cannot be pushed into walls or other boxes
+    - Use boxes to block enemies or create paths
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
+    ```c title="Box Movement Logic"
+    void MoverObstaculo(int direccion){
+        // Check if space ahead is clear
+        if(direccion == 0 && 
+           mapMemory[(posJugFila-4)*32+posJugColumna] != 18 && 
+           mapMemory[(posJugFila-4)*32+posJugColumna] != 19) {
+            // Move box 2 tiles up
+            mapMemory[(posJugFila-4)*32+posJugColumna] = 19;
+            // Clear old position
+            mapMemory[(posJugFila-2)*32+posJugColumna] = 3;
+        }
+    }
+    ```
   </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+  
+  <Accordion title="Enemy Encounters">
+    - Enemies occupy 2×2 tiles like the player
+    - Push enemies to move them or eliminate them
+    - If an enemy has nowhere to go, it is eliminated
+    - Eliminating an enemy costs 1 stamina (you don't move)
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
+    **Strategy**: Use walls and boxes to trap enemies before pushing them.
+  </Accordion>
+  
+  <Accordion title="Stamina Management">
+    - Each level has a specific movement limit
+    - Watch the green stamina bar on the bottom screen
+    - Plan your route carefully to avoid running out
+    - Restarting the level refills stamina completely
+    
+    **Level Budgets**:
+    - Level 1: 18 moves
+    - Level 2: 19 moves  
+    - Level 3: 23 moves
+    - Level 4: 21 moves
+    - Level 5: 24 moves
+  </Accordion>
+  
+  <Accordion title="Quiz Questions">
+    - Answer questions correctly to advance
+    - Wrong answers restart the current level
+    - Each level has 1-3 questions
+    - Touch the correct answer button quickly
+    
+    <Warning>
+      The quiz questions are in Spanish. Make sure you understand the questions before selecting an answer.
+    </Warning>
   </Accordion>
 </AccordionGroup>
 
-### Step 2: Deploy your changes
+### Level 1 Walkthrough
+
+Here's a basic strategy for completing the first level:
+
+<Steps>
+  <Step title="Initial Assessment">
+    - Starting position: Bottom-left area
+    - Movement budget: 18 moves
+    - Obstacles: 2 enemies, 3 boxes
+    - Goal: Reach the NPC at the top-right
+  </Step>
+  
+  <Step title="Enemy Handling">
+    Push the first enemy up and right to eliminate it against the wall:
+    - Move right (1 move)
+    - Move up (1 move)
+    - Push enemy up (1 move)
+  </Step>
+  
+  <Step title="Navigate Boxes">
+    Clear a path by pushing boxes:
+    - Push middle box right (1 move + movement)
+    - Navigate around remaining boxes
+  </Step>
+  
+  <Step title="Reach the Goal">
+    Move to the NPC position and touch the goal tile (marked as tile 23):
+    ```c
+    // When player reaches goal
+    case 23: 
+        ConsultarSistemaDialogo(); 
+        return 6;
+    ```
+  </Step>
+  
+  <Step title="Answer Quiz">
+    Three questions will appear:
+    - Question 1: Select option 2 (right button)
+    - Question 2: Select option 1 (left button)  
+    - Question 3: Select option 1 (left button)
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Build Issues
 
 <AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+  <Accordion title="'arm-none-eabi-gcc' not found">
+    **Problem**: DevkitPro ARM is not in PATH
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
+    **Solution**:
+    ```bash
+    # Add to ~/.bashrc, ~/.zshrc, or equivalent
+    export DEVKITPRO=/opt/devkitpro
+    export DEVKITARM=$DEVKITPRO/devkitARM
+    export PATH=$DEVKITARM/bin:$PATH
+    
+    # Reload shell
+    source ~/.bashrc
+    ```
+  </Accordion>
+  
+  <Accordion title="'nds.h' not found">
+    **Problem**: libnds is not installed or not found
+    
+    **Solution**:
+    ```bash
+    # Reinstall libnds
+    sudo dkp-pacman -S libnds
+    
+    # Verify installation
+    ls $DEVKITPRO/libnds/include/nds.h
+    ```
+  </Accordion>
+  
+  <Accordion title="Linking errors">
+    **Problem**: Missing library files
+    
+    **Solution**:
+    ```bash
+    # Ensure libnds9 is available
+    ls $DEVKITPRO/libnds/lib/libnds9.a
+    
+    # Add explicit library path
+    -L$DEVKITPRO/libnds/lib -lnds9
+    ```
+  </Accordion>
+  
+  <Accordion title="ndstool: command not found">
+    **Problem**: NDS tools not installed
+    
+    **Solution**:
+    ```bash
+    # Install complete NDS toolchain
+    sudo dkp-pacman -S nds-dev
+    
+    # Verify ndstool
+    which ndstool
+    ```
   </Accordion>
 </AccordionGroup>
 
-### Step 3: Go live
+### Runtime Issues
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+<AccordionGroup>
+  <Accordion title="White screens on emulator">
+    **Problem**: Graphics not loading
+    
+    **Possible causes**:
+    - Corrupted ROM build
+    - Missing graphics assets in compilation
+    - Emulator compatibility issue
+    
+    **Solution**:
+    - Rebuild the ROM: `make clean && make`
+    - Try a different emulator
+    - Verify all `.h` asset files are present
+  </Accordion>
+  
+  <Accordion title="Touchscreen not responding">
+    **Problem**: Can't interact with menus
+    
+    **Solution**:
+    - **DeSmuME**: Ensure mouse emulation is enabled (View > Touch Screen)
+    - **melonDS**: Click directly on bottom screen area
+    - **Real DS**: Recalibrate touchscreen in DS system settings
+  </Accordion>
+  
+  <Accordion title="Game freezes during level transition">
+    **Problem**: Hangs when answering questions
+    
+    **Possible cause**: Timer interrupt issues
+    
+    **Solution**:
+    - Use accurate emulator settings (DeSmuME: Config > Emulation Settings > Use dynamic recompiler)
+    - Rebuild ROM with optimizations: `-O2` flag
+  </Accordion>
+  
+  <Accordion title="Stamina bar not updating">
+    **Problem**: Visual glitch with HUD
+    
+    **Cause**: Framebuffer not refreshing
+    
+    **Solution**:
+    - Check that `ActualizarBarraMovimientos()` is called after each move
+    - Verify VRAM is properly initialized:
+    ```c
+    VRAM_A_CR = VRAM_ENABLE | VRAM_A_LCD;
+    fb = VRAM_A;
+    ```
+  </Accordion>
+</AccordionGroup>
 
-## Next steps
+### Flash Cart Issues
 
-Now that you have your docs running, explore these key features:
+<AccordionGroup>
+  <Accordion title="ROM not appearing in menu">
+    **Problem**: Flash cart doesn't show the game
+    
+    **Solution**:
+    - Verify FAT32 format on microSD
+    - Check file extension is `.nds`
+    - Some carts require specific folder structure (e.g., `/games/`)
+    - Ensure ROM size is reasonable (should be < 1 MB for this game)
+  </Accordion>
+  
+  <Accordion title="Game crashes on real hardware">
+    **Problem**: Works in emulator but not on DS
+    
+    **Possible causes**:
+    - Flash cart firmware needs update
+    - ROM header issues
+    - Timing differences between emulator and hardware
+    
+    **Solution**:
+    - Update flash cart firmware
+    - Rebuild with hardware-specific optimizations
+    - Test on emulator with accurate settings first
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+Now that you have the game running:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Game Mechanics" icon="book">
+    Learn advanced strategies and game mechanics
+  </Card>
+  <Card title="Level Solutions" icon="map">
+    View optimal solutions for each puzzle level
+  </Card>
+  <Card title="Modding Guide" icon="wrench">
+    Create custom levels and modify graphics
+  </Card>
+  <Card title="Source Code Deep Dive" icon="code">
+    Understand the technical implementation
+  </Card>
 </CardGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  If you encounter issues not covered in this guide, check the DevkitPro documentation at [devkitpro.org](https://devkitpro.org/wiki/Main_Page) or the libnds API reference.
 </Note>
