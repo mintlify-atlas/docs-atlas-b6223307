@@ -348,10 +348,10 @@ PreguntasAcertadasFinal.h/.s // Final victory screen
 
 The game loads approximately 94 tiles into VRAM:
 
-```
+```c
 Tile Memory Usage:
 94 tiles × 64 bytes = 6,016 bytes (~6 KB)
-```
+```c
 
 **VRAM Allocation**:
 ```c
@@ -362,9 +362,9 @@ tileMemory = (u8*) BG_TILE_RAM_SUB(1);  // Base 1 in sub screen
 
 Each fullscreen bitmap:
 
-```
+```c
 256 × 192 pixels × 2 bytes = 98,304 bytes (~96 KB)
-```
+```c
 
 **Total assets**: ~20 bitmaps × 96 KB = ~1.9 MB
 
@@ -374,7 +374,7 @@ Each level map:
 
 ```  
 32 × 24 tiles × 2 bytes = 1,536 bytes (~1.5 KB)
-```
+```c
 
 **Total levels**: 5 levels + menu × 1.5 KB = ~9 KB
 

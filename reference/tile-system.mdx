@@ -40,7 +40,7 @@ mapMemory = (u16*) BG_MAP_RAM_SUB(0);
 
 ### Memory Layout
 
-```
+```text
 Tile Memory (tileMemory):
   Offset 0:    Tile 0 (64 bytes)
   Offset 64:   Tile 1 (64 bytes)
@@ -56,7 +56,7 @@ Map Memory (mapMemory):
   [32]: Tile index at (0, 1)
   ...
   [fila*32 + columna]: Tile index at (columna, fila)
-```
+```c
 
 ## Map Memory (BG_MAP_RAM_SUB)
 
@@ -281,14 +281,14 @@ All game entities (player, enemies, NPCs, boxes) are composed of **2×2 tile arr
 
 ### Player Sprite Layout
 
-```
+```c
 ┌─────────┬─────────┐
 │ Tile 0  │ Tile 8  │  <- Top row
 ├─────────┼─────────┤
 │ Tile 9  │ Tile 10 │  <- Bottom row
 └─────────┴─────────┘
    8px       8px
-```
+```c
 
 In code (main.c:304-314):
 
@@ -308,13 +308,13 @@ mapMemory[pos_mapMemory] = ElegirFondoJugador(3, pos_mapMemory);  // Bottom-righ
 
 ### Enemy Sprite Layout (Frame 1)
 
-```
+```c
 ┌─────────┬─────────┐
 │ Tile 5  │ Tile 14 │
 ├─────────┼─────────┤
 │ Tile 15 │ Tile 16 │
 └─────────┴─────────┘
-```
+```c
 
 Example from `MoverEnemigo()` (main.c:522-525):
 
@@ -327,13 +327,13 @@ mapMemory[(posJugFila-3)*32 + (posJugColumna+1)] = 16;  // Bottom-right
 
 ### Box Sprite Layout
 
-```
+```c
 ┌─────────┬─────────┐
 │ Tile 19 │ Tile 20 │
 ├─────────┼─────────┤
 │ Tile 21 │ Tile 22 │
 └─────────┴─────────┘
-```
+```c
 
 Example from `MoverObstaculo()` (main.c:608-611):
 
@@ -454,7 +454,7 @@ Each tile is **8×8 pixels** stored as **64 bytes** in tile memory:
 
 ### Memory Structure
 
-```
+```c
 Tile N at tileMemory + (64 * N):
   Byte 0:  Row 0, Column 0 (palette index)
   Byte 1:  Row 0, Column 1
@@ -464,7 +464,7 @@ Tile N at tileMemory + (64 * N):
   Byte 8:  Row 1, Column 0
   ...
   Byte 63: Row 7, Column 7
-```
+```c
 
 ### Palette Index Format
 

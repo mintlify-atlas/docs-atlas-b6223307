@@ -107,7 +107,7 @@ cd una-aventura-inesperada
 
 ### Expected Structure
 
-```
+```text
 .
 ├── source/
 │   ├── main.c              # Main game code
@@ -120,7 +120,7 @@ cd una-aventura-inesperada
 │   └── Pregunta*.h/.s      # Question screens
 ├── Makefile                # Build configuration
 └── README.md               # Project documentation
-```
+```text
 
 <Note>
 The actual project currently has a flat structure in `source/` without a Makefile in the repository. You may need to create one based on the standard devkitPro NDS template.
@@ -130,8 +130,7 @@ The actual project currently has a flat structure in `source/` without a Makefil
 
 If the project doesn't include a Makefile, create one based on the devkitPro template:
 
-<CodeGroup>
-```makefile Basic Makefile
+```makefile title="Basic Makefile"
 #---------------------------------------------------------------------------------
 .SUFFIXES:
 #---------------------------------------------------------------------------------
@@ -241,7 +240,7 @@ endif
 #---------------------------------------------------------------------------------
 ```
 
-```makefile With Graphics Conversion
+```makefile title="With Graphics Conversion"
 # Add to the basic Makefile for automatic image conversion
 
 #---------------------------------------------------------------------------------
@@ -261,7 +260,6 @@ PNGFILES := $(foreach dir,$(GRAPHICS),$(wildcard $(dir)/*.png))
 	@echo $(notdir $<)
 	@grit $< -fts -o$(basename $@)
 ```
-</CodeGroup>
 
 ## Development Tools
 
